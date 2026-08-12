@@ -233,19 +233,31 @@ def backtest_stock(px_stock, px_spx, rf=0.04):
         return None
     cagr = lambda p: (p.iloc[-1] / p.iloc[0]) ** (252 / len(p)) - 1
     rs, rm = s.pct_change().dropna(), m.pct_change().dropna()
+    j = rs.index.intersection(rm.index)
+    rs, rm = rs.loc[j], rm.loc[j]
     vol = lambda r: r.std() * np.sqrt(252)
     mdd = lambda p: (p / p.cummax() - 1).min()
+    # beta y alpha (CAPM)
+    var_m = rm.var()
+    beta = (rs.cov(rm) / var_m) if var_m > 0 else np.nan
+    cagr_s, cagr_m = cagr(s), cagr(m)
+    alpha = cagr_s - (rf + beta * (cagr_m - rf)) if not np.isnan(beta) else np.nan
+    # sortino (solo castiga caidas)
+    downside = rs[rs < 0].std() * np.sqrt(252)
+    sortino = (cagr_s - rf) / downside if downside > 0 else np.nan
     roll_s = (s / s.shift(252) - 1).dropna()
     roll_m = (m / m.shift(252) - 1).dropna()
-    j = roll_s.index.intersection(roll_m.index)
-    excess = roll_s.loc[j] - roll_m.loc[j]
-    out = {"years": len(s) / 252, "cagr_s": cagr(s), "cagr_m": cagr(m),
+    k = roll_s.index.intersection(roll_m.index)
+    excess = roll_s.loc[k] - roll_m.loc[k]
+    out = {"years": len(s) / 252, "cagr_s": cagr_s, "cagr_m": cagr_m,
            "vol_s": vol(rs), "vol_m": vol(rm),
-           "sharpe_s": (cagr(s) - rf) / vol(rs) if vol(rs) > 0 else np.nan,
-           "sharpe_m": (cagr(m) - rf) / vol(rm) if vol(rm) > 0 else np.nan,
+           "sharpe_s": (cagr_s - rf) / vol(rs) if vol(rs) > 0 else np.nan,
+           "sharpe_m": (cagr_m - rf) / vol(rm) if vol(rm) > 0 else np.nan,
            "mdd_s": mdd(s), "mdd_m": mdd(m),
            "avg1y_s": roll_s.mean(), "avg1y_m": roll_m.mean(),
-           "avg_excess": excess.mean(), "win_rate": (excess > 0).mean() * 100}
+           "avg_excess": excess.mean(), "win_rate": (excess > 0).mean() * 100,
+           "beta": beta, "alpha": alpha, "sortino": sortino,
+           "best1y": roll_s.max(), "worst1y": roll_s.min()}
     return out, s / s.iloc[0], m / m.iloc[0], roll_s, roll_m
 
 def tabla_financieros(stmt):
@@ -306,6 +318,7 @@ if st.button("🎯 Analizar", type="primary", use_container_width=True):
     pos, rie, fuertes, debiles = explicar(fs)
     reco = recomendacion(score) if not np.isnan(score) else "N/A"
     riesgo = nivel_riesgo(fs["Risk"]["score"])
+    factores_dict = {f: fs[f]["score"] for f in fs}
     color = {"STRONG BUY": "🟢", "BUY": "🟢", "WEAK BUY / WATCHLIST": "🟡",
              "HOLD": "🟡", "WEAK HOLD": "🟠", "AVOID": "🔴"}.get(reco, "⚪")
 
@@ -326,7 +339,7 @@ if st.button("🎯 Analizar", type="primary", use_container_width=True):
     st.subheader("Desglose por factores")
     fig, ax = plt.subplots(figsize=(8, 3.2))
     facs = ["Growth", "Profitability", "CashFlow", "Risk", "Valuation", "Quality"]
-    vals = [fs[f]["score"] if not np.isnan(fs[f]["score"]) else 0 for f in facs]
+    vals = [factores_dict[f] if pd.notna(factores_dict[f]) else 0 for f in facs]
     colores = ["#2e8b57" if v >= 66 else "#e67e22" if v >= 33 else "#c0392b" for v in vals]
     ax.barh(facs[::-1], vals[::-1], color=colores[::-1])
     ax.set_xlim(0, 100); ax.axvline(50, color="gray", ls=":", lw=1)
@@ -427,6 +440,15 @@ if st.button("🎯 Analizar", type="primary", use_container_width=True):
         b4.metric("Volatilidad", f"{o['vol_s']*100:.0f}%", f"S&P {o['vol_m']*100:.0f}%", delta_color="off")
         b5.metric("Sharpe", f"{o['sharpe_s']:.2f}", f"S&P {o['sharpe_m']:.2f}", delta_color="off")
         b6.metric("Peor caída", f"{o['mdd_s']*100:.0f}%", f"S&P {o['mdd_m']*100:.0f}%", delta_color="off")
+        b7, b8, b9 = st.columns(3)
+        b7.metric("Alpha (anual)", f"{o['alpha']*100:+.1f}%" if pd.notna(o['alpha']) else "n/d",
+                  help="Rendimiento que le ganó al mercado AJUSTADO por su riesgo (CAPM). Positivo = valió la pena.")
+        b8.metric("Beta", f"{o['beta']:.2f}" if pd.notna(o['beta']) else "n/d",
+                  help="Cuánto se mueve con el mercado. >1 amplifica; <1 amortigua.")
+        b9.metric("Sortino", f"{o['sortino']:.2f}" if pd.notna(o['sortino']) else "n/d",
+                  help="Como Sharpe pero solo castiga las caídas, no las subidas.")
+        st.write(f"Mejor año: **{o['best1y']*100:+.0f}%**  ·  Peor año: **{o['worst1y']*100:+.0f}%**  "
+                 f"(retornos móviles a 1 año, el rango que ha vivido esta acción)")
 
         g1, g2 = st.columns(2)
         fig1, ax1 = plt.subplots(figsize=(6, 3.6))
