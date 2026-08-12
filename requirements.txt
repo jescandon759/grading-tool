@@ -4,3 +4,4 @@ pandas
 numpy
 matplotlib
 vaderSentiment
+spicy
