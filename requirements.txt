@@ -1,7 +1,7 @@
-streamlit
-yfinance
-pandas
-numpy
-matplotlib
+streamlit>=1.36
+yfinance>=0.2.54
+pandas>=2.0
+numpy>=1.26
+scipy>=1.11
+plotly>=5.20
 vaderSentiment
-spicy
