@@ -59,7 +59,8 @@ def pct(x, d=1):
 
 
 def money(x, d=2):
-    return f"${x:,.{d}f}" if isinstance(x, (int, float, np.floating)) and pd.notna(x) else "n/d"
+    # "\$" evita que Streamlit lea "$215 – $405" como formula LaTeX
+    return f"\\${x:,.{d}f}" if isinstance(x, (int, float, np.floating)) and pd.notna(x) else "n/d"
 
 
 # ================================================================ CACHE
