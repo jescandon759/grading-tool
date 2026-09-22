@@ -97,6 +97,13 @@ def get_earnings(tickers: tuple):
     return data.fetch_earnings_dates(list(tickers))
 
 
+@st.cache_data(ttl=15 * 60, show_spinner=False)
+def get_quote(ticker):
+    """Precio y estimados de analistas: cambian seguido, por eso cache de solo 15 min
+    (los fundamentales para el score se guardan 24 h)."""
+    return sm.fetch_infos([ticker])[0].get(ticker, {})
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_context(ticker):
     import yfinance as yf
@@ -303,13 +310,15 @@ with seccion(tab_a):
             st.info("No hay suficiente historia de precios.")
 
         st.subheader("📊 Lo que esperan los analistas")
-        info = get_infos((ticker,))[0].get(ticker, {})
+        info = get_quote(ticker)
+        st.caption(f"Datos de analistas actualizados cada 15 min · consulta: {pd.Timestamp.now(tz='America/Mexico_City'):%d-%b %H:%M}")
         tm, cur = info.get("targetMeanPrice"), info.get("currentPrice") or info.get("regularMarketPrice")
         lo, hi, na = info.get("targetLowPrice"), info.get("targetHighPrice"), info.get("numberOfAnalystOpinions")
         if tm and cur:
             up = tm / cur - 1
             a = st.columns(4)
-            a[0].metric("Precio actual", money(cur)); a[1].metric("Objetivo promedio", money(tm), pct(up))
+            a[0].metric("Precio actual", money(cur)); a[1].metric("Objetivo a 12 meses (prom.)", money(tm), pct(up),
+                         help="Promedio de los precios objetivo de los analistas, a 12 meses desde que cada uno lo publicó.")
             a[2].metric("Rango objetivo", f"{money(lo, 0)} – {money(hi, 0)}")
             a[3].metric("Recomendación", str(info.get("recommendationKey") or "n/d").upper())
             if lo and hi:
