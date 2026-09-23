@@ -120,6 +120,8 @@ def run(close: pd.DataFrame, vol: pd.DataFrame, infos: dict, earnings: pd.Series
     (root / "snapshots" / "fund").mkdir(parents=True, exist_ok=True)
     (root / "snapshots" / "score").mkdir(parents=True, exist_ok=True)
     num = uni[[c for c in uni.columns if not c.startswith("_")]]
+    num = num.assign(_name=uni["_name"], _price=px_.iloc[-1].reindex(uni.index),
+                     _upside=data.fundamentals_from_infos({t: infos[t] for t in uni.index})["upside"].reindex(uni.index))
     num.assign(sector=uni["_sector"]).to_csv(root / "snapshots" / "fund" / f"{stamp}.csv.gz", compression="gzip")
     partes = [sm.rank_universe(uni[uni["_sector"] == s]) for s in uni["_sector"].unique()
               if (uni["_sector"] == s).sum() >= 8]

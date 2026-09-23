@@ -71,27 +71,113 @@ def get_sp500():
     return data.sp500_universe()
 
 
+class SinDatos(Exception):
+    """Se lanza dentro de funciones cacheadas para que un fallo de Yahoo NO quede guardado."""
+
+
 @st.cache_data(ttl=6 * 3600, show_spinner=False)
+def _prices_cached(tickers: tuple, period: str):
+    close, vol, rep = data.download_prices(list(tickers), period=period)
+    if close.empty:
+        raise SinDatos("Yahoo no devolvió precios")
+    return close, vol, rep
+
+
 def get_prices(tickers: tuple, period: str):
-    return data.download_prices(list(tickers), period=period)
+    """Precios con cache de 6 h; si Yahoo falla, no se guarda el fallo (se reintenta la próxima vez)."""
+    try:
+        return _prices_cached(tickers, period)
+    except SinDatos:
+        return pd.DataFrame(), pd.DataFrame(), {"ok": [], "fallidos": list(tickers), "con_huecos": {}}
 
 
-@st.cache_data(ttl=24 * 3600, show_spinner=False)
-def get_infos(tickers: tuple):
-    return sm.fetch_infos(list(tickers))
+@st.cache_resource
+def _info_store() -> dict:
+    return {}                                  # ticker -> (hora, info). Solo guarda ÉXITOS.
 
 
-def get_universe(tickers: tuple):
-    """Metricas de todo el universo: precios 2 anios + fundamentales. Devuelve (df, reporte)."""
+def infos_live(tickers, ttl=24 * 3600):
+    """Fundamentales en vivo de Yahoo. Guarda solo las respuestas buenas, así un rate limit
+    temporal no deja a una acción 'sin datos' por 24 horas."""
+    store, now = _info_store(), pd.Timestamp.now().timestamp()
+    out = {t: store[t][1] for t in tickers if t in store and now - store[t][0] < ttl}
+    faltan = [t for t in tickers if t not in out]
+    bad = []
+    if faltan:
+        got, bad = sm.fetch_infos(faltan, workers=4)
+        for t, i in got.items():
+            store[t] = (now, i)
+        out.update(got)
+    return out, bad
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_snapshot():
+    """Último snapshot semanal (lo genera GitHub Actions cada sábado): fundamentales de todo el
+    S&P 500 sin depender de Yahoo en el momento. Respaldo cuando Yahoo limita al servidor de la app."""
+    import pathlib
+    base = pathlib.Path(__file__).parent / "snapshots"
+    files = sorted((base / "fund").glob("*.csv.gz"))
+    if not files:
+        return pd.DataFrame(), None
+    df = pd.read_csv(files[-1], index_col=0)
+    sc_file = base / "score" / files[-1].name
+    if "_name" not in df and sc_file.exists():
+        s2 = pd.read_csv(sc_file, index_col=0)
+        df["_name"], df["_price"] = s2["Empresa"].reindex(df.index), s2["precio"].reindex(df.index)
+    df["_sector"] = df.pop("sector") if "sector" in df else ""
+    return df, files[-1].name[:10]
+
+
+def _refresh_price_metrics(df: pd.DataFrame, close: pd.DataFrame) -> pd.DataFrame:
+    """Recalcula volatilidad, peor caída y momentum con precios de hoy (el resto del snapshot se queda)."""
+    df = df.copy()
+    for t in df.index:
+        if t in close:
+            p = close[t].dropna()
+            if len(p) > 30:
+                r = p.pct_change().dropna()
+                df.loc[t, "volatility"] = float(r.std() * np.sqrt(252))
+                df.loc[t, "max_drawdown"] = float((p / p.cummax() - 1).min())
+                df.loc[t, "_price"] = float(p.iloc[-1])
+            for k, v in sm.momentum_metrics(p).items():
+                df.loc[t, k] = v
+    return df
+
+
+def get_universe(tickers: tuple, target: str | None = None):
+    """Métricas del universo. Orden: Yahoo en vivo para la acción analizada y las que no están en el
+    snapshot; el resto sale del snapshot semanal (+ precios de hoy). Devuelve (df, reporte)."""
     close, _, rep = get_prices(tickers, "2y")
-    infos, bad = get_infos(tickers)
-    rep = dict(rep); rep["sin_fundamentales"] = bad
-    return sm.build_universe(infos, close), rep
+    snap, fecha = load_snapshot()
+    en_snap = [t for t in tickers if t in snap.index]
+    vivos = [t for t in tickers if t not in snap.index] + ([target] if target in en_snap else [])
+    infos, bad = infos_live(vivos) if vivos else ({}, [])
+    live = sm.build_universe(infos, close) if infos else pd.DataFrame()
+    resto = [t for t in en_snap if t not in live.index]
+    parte_snap = _refresh_price_metrics(snap.loc[resto], close) if resto else pd.DataFrame()
+    uni = pd.concat([live, parte_snap])
+    rep = dict(rep)
+    rep["sin_fundamentales"] = [t for t in bad if t not in uni.index]
+    rep["snapshot"] = (fecha, len(parte_snap))
+    return uni, rep
 
 
-@st.cache_data(ttl=12 * 3600, show_spinner=False)
 def get_fund(tickers: tuple):
-    return data.fetch_fundamentals(list(tickers))
+    """Fundamentales para el screener: en vivo y, si Yahoo falla, del snapshot semanal."""
+    infos, bad = infos_live(list(tickers))
+    fund = data.fundamentals_from_infos(infos)
+    snap, _ = load_snapshot()
+    rescate = [t for t in bad if t in snap.index]
+    if rescate:
+        s = snap.loc[rescate]
+        extra = pd.DataFrame({"name": s.get("_name"), "roe": s["roe"], "gross": s["gross_margin"],
+                              "oper": s["operating_margin"], "de": s["debt_to_equity"],
+                              "earn_yield": s["earnings_yield"], "book_yield": s["book_yield"],
+                              "fcf_yield": s["fcf_yield"], "rev_g": s["revenue_growth"],
+                              "upside": s["_upside"] if "_upside" in s else np.nan}, index=rescate)
+        fund = pd.concat([fund, extra])
+    return fund, [t for t in bad if t not in rescate]
 
 
 @st.cache_data(ttl=12 * 3600, show_spinner=False)
@@ -99,11 +185,9 @@ def get_earnings(tickers: tuple):
     return data.fetch_earnings_dates(list(tickers))
 
 
-@st.cache_data(ttl=15 * 60, show_spinner=False)
 def get_quote(ticker):
-    """Precio y estimados de analistas: cambian seguido, por eso cache de solo 15 min
-    (los fundamentales para el score se guardan 24 h)."""
-    return sm.fetch_infos([ticker])[0].get(ticker, {})
+    """Precio y analistas: se refrescan cada 15 min (y un fallo no se guarda)."""
+    return infos_live([ticker], ttl=15 * 60)[0].get(ticker, {})
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -146,6 +230,10 @@ def reporte_calidad(rep: dict, total: int):
         if sinf: st.write("**Sin fundamentales:** " + ", ".join(sinf))
         if hue: st.write("**Huecos >2% en precios:** " + ", ".join(f"{k} ({v}%)" for k, v in hue.items()))
         if not (bad or sinf or hue): st.write("Todo completo.")
+        fecha, n_snap = rep.get("snapshot", (None, 0))
+        if n_snap:
+            st.write(f"**{n_snap} empresas** con fundamentales del snapshot semanal del **{fecha}** "
+                     "(precios y momentum de hoy). La acción analizada se consulta en vivo si Yahoo responde.")
 
 
 def progress_cols(cols):
@@ -213,17 +301,21 @@ with seccion(tab_a):
     if st.button("🎯 Analizar", type="primary", width="stretch"):
         if not ticker:
             alto("Escribe un ticker.")
-        with st.spinner("Buscando la empresa..."):
-            infos1, _ = get_infos((ticker,))
-        if ticker not in infos1:
-            alto(f"Yahoo no devolvió datos de {ticker}. Revisa el ticker o intenta en un minuto.")
+        info1 = {}
+        if ticker not in set(u["Ticker"]):              # fuera del S&P: necesitamos Yahoo para saber su sector
+            with st.spinner("Buscando la empresa en Yahoo..."):
+                info1 = infos_live([ticker])[0].get(ticker, {})
+            if not info1 and modo.startswith("Su sector"):
+                motivo = sm.LAST_ERRORS.get(ticker, "sin respuesta")
+                alto(f"No pude obtener datos de {ticker} ({motivo}). Si es un ticker válido, Yahoo está "
+                     "limitando al servidor de la app: intenta en unos minutos o usa 'Lista personalizada'.")
         if modo.startswith("Su sector"):
-            peers, etiqueta = peers_for(ticker, infos1[ticker])
+            peers, etiqueta = peers_for(ticker, info1)
         else:
             peers, etiqueta = data.parse_tickers(uni_txt), "lista personalizada"
         universo = tuple(sorted(set(peers) | {ticker}))
         with st.spinner(f"Descargando {len(universo)} empresas ({etiqueta})... ~30-60 s la 1ª vez"):
-            uni, rep = get_universe(universo)
+            uni, rep = get_universe(universo, target=ticker)
         st.session_state["an"] = dict(ticker=ticker, uni=uni, rep=rep, etiqueta=etiqueta, n=len(universo))
 
     A = st.session_state.get("an")
@@ -231,7 +323,8 @@ with seccion(tab_a):
         ticker, uni = A["ticker"], A["uni"]
         reporte_calidad(A["rep"], A["n"])
         if ticker not in uni.index:
-            alto("Sin datos de la empresa.")
+            alto(f"Sin datos de {ticker}: {sm.LAST_ERRORS.get(ticker, 'Yahoo no respondió')}. "
+                 "Intenta en unos minutos.")
         met = uni.loc[ticker].to_dict()
         fs = sm.factor_scores(met, uni)
         score, conf = sm.investment_score(fs), sm.confianza(fs)

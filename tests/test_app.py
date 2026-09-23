@@ -21,6 +21,8 @@ def _fake(mp):
         return pd.concat({"Close": c, "Volume": v}, axis=1)
 
     def finfo(t):
+        if t in ("SNDK", "ZZZZ"):                  # simula rate limit de Yahoo
+            return t, None
         g = np.random.default_rng(abs(hash(t)) % 2**32)
         return t, info(eps=g.normal(4, 3), revenueGrowth=g.normal(.08, .1), grossMargins=g.uniform(.2, .8),
                        debtToEquity=g.uniform(0, 200), targetMeanPrice=110, targetLowPrice=None,
@@ -48,7 +50,7 @@ def _click(at, label):
     [b for b in at.button if b.label.startswith(label)][0].click()
     at.run(timeout=900)
     assert not at.exception, [e.value for e in at.exception]
-    errs = [e.value for e in at.error if not str(e.value).startswith("**Veredicto")]
+    errs = [e.value for e in at.error if not str(e.value).startswith(("**Veredicto", "🔴", "**Ni fundamentales"))]
     assert not errs, errs
 
 
@@ -58,6 +60,13 @@ def test_app(monkeypatch):
     at.run(); assert not at.exception
     _click(at, "🎯 Analizar")
     assert "an" in at.session_state and len(at.session_state["an"]["uni"]) > 50
+    # Yahoo falla para una accion del S&P 500 -> sale del snapshot semanal
+    at.text_input[0].set_value("SNDK"); _click(at, "🎯 Analizar")
+    assert "SNDK" in at.session_state["an"]["uni"].index
+    # fuera del S&P y Yahoo falla -> mensaje claro, sin romper la app
+    at.text_input[0].set_value("ZZZZ")
+    [b for b in at.button if b.label.startswith("🎯 Analizar")][0].click(); at.run(timeout=900)
+    assert not at.exception and any("No pude obtener datos de ZZZZ" in str(e.value) for e in at.error)
     _click(at, "🏆 Calcular ranking")
     _click(at, "📅 Correr screener")
     [sb for sb in at.selectbox if sb.label == "Años de prueba"][0].set_value(5)

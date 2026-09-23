@@ -137,16 +137,23 @@ def momentum_score(df: pd.DataFrame) -> pd.Series:
 
 
 # ---------------------------------------------------------------- DESCARGA
-def _info_one(t, retries=2):
+LAST_ERRORS: dict[str, str] = {}   # ticker -> ultimo motivo de fallo (para mensajes claros)
+
+
+def _info_one(t, retries=3):
     import yfinance as yf
     for k in range(retries + 1):
         try:
             info = yf.Ticker(t).info or {}
             if len(info) > 5:
+                LAST_ERRORS.pop(t, None)
                 return t, info
-        except Exception:
-            pass
-        time.sleep(0.7 * (k + 1))
+            LAST_ERRORS[t] = "respuesta vacía (ticker inexistente o sin cobertura en Yahoo)"
+        except Exception as e:
+            msg = str(e)
+            LAST_ERRORS[t] = ("Yahoo está limitando las consultas (rate limit)"
+                              if ("Too Many" in msg or "Rate" in msg or "429" in msg) else msg[:160])
+        time.sleep(1.5 * (k + 1))            # espera creciente: 1.5, 3, 4.5 s
     return t, None
 
 
