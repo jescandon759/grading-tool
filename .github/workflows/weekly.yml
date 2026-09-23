@@ -1,0 +1,36 @@
+name: Screener semanal
+
+# Sabado 9:00 am hora de Mexico (15:00 UTC): datos del cierre del viernes.
+# El correo lo manda una tarea programada de Claude el domingo 10:00 am leyendo reports/latest.json.
+on:
+  schedule:
+    - cron: "0 15 * * 6"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-job
+  cancel-in-progress: false
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Screener + snapshots + paper trading
+        run: python scripts/weekly_job.py
+      - name: Guardar resultados en el repo
+        run: |
+          git config user.name "weekly-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add reports paper snapshots
+          git diff --cached --quiet || git commit -m "Screener semanal $(date -u +%Y-%m-%d)"
+          git push
