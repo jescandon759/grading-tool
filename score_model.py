@@ -177,7 +177,9 @@ def build_universe(infos: dict, close: pd.DataFrame) -> pd.DataFrame:
             m.update(momentum_metrics(p))
         m["_name"] = info.get("shortName") or t
         m["_price"] = info.get("currentPrice") or info.get("regularMarketPrice") or np.nan
-        m["_sector"] = YAHOO_SECTOR.get(info.get("sector"), info.get("sector") or "")
+        m["_sector"] = YAHOO_SECTOR.get(info.get("sector"), info.get("sector") or info.get("sector_es") or "")
+        m["_fuente"] = info.get("fuente", "Yahoo Finance")
+        m["_ultimo_reporte"] = info.get("ultimo_reporte")
         rows[t] = m
     df = pd.DataFrame(rows).T
     for c in df.columns:

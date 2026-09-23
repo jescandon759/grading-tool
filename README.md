@@ -21,3 +21,9 @@ No es asesoría financiera. Datos gratuitos de Yahoo Finance.
 - **Domingo 10:00 (tarea programada de Claude)**: lee `reports/latest.json` y manda el correo.
 - Destinatarios, lista extra, pesos y reglas del portafolio: **`config/settings.json`**.
 - Correr a mano: pestaña *Actions* → *Screener semanal* → *Run workflow*.
+
+## Fuentes de datos
+1. **Yahoo Finance** (precios, fundamentales, analistas).
+2. **Snapshot semanal** (`snapshots/`) para el S&P 500 cuando Yahoo limita al servidor de la app.
+3. **SEC EDGAR** (`sec_data.py`, fuente oficial) para cualquier empresa que reporte a la SEC cuando Yahoo falla.
+   La SEC pide identificarse: pon tu correo en `config/settings.json` → `sec_user_agent` si alguna vez rechaza consultas.

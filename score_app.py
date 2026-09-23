@@ -18,6 +18,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import data
+import sec_data
 import factors as fx
 import backtest as bt
 import research as rs
@@ -25,6 +26,12 @@ import score_model as sm
 import screener as sc
 
 st.set_page_config(page_title="Investment Score", page_icon="🎯", layout="wide")
+try:   # la SEC pide identificarse; se puede poner un correo en config/settings.json -> "sec_user_agent"
+    import json as _json, pathlib as _pl
+    sec_data.UA = _json.loads((_pl.Path(__file__).parent / "config" / "settings.json").read_text()).get(
+        "sec_user_agent", sec_data.UA)
+except Exception:
+    pass
 AZUL, VERDE, ROJO, NARANJA, GRIS = "#2c6fbb", "#2e8b57", "#c0392b", "#e67e22", "#8a8f98"
 FACS = list(sm.FACTORES)
 UNIVERSO_ORIGINAL = [
@@ -96,19 +103,36 @@ def _info_store() -> dict:
     return {}                                  # ticker -> (hora, info). Solo guarda ÉXITOS.
 
 
-def infos_live(tickers, ttl=24 * 3600):
-    """Fundamentales en vivo de Yahoo. Guarda solo las respuestas buenas, así un rate limit
-    temporal no deja a una acción 'sin datos' por 24 horas."""
+def _beta(close: pd.DataFrame | None, t: str) -> float | None:
+    if close is None or t not in close or "SPY" not in close:
+        return None
+    r = close[[t, "SPY"]].pct_change(fill_method=None).dropna().iloc[-504:]
+    return float(r[t].cov(r["SPY"]) / r["SPY"].var()) if len(r) > 60 and r["SPY"].var() > 0 else None
+
+
+def infos_live(tickers, ttl=24 * 3600, close: pd.DataFrame | None = None, sec_max: int = 40):
+    """Fundamentales en vivo: 1) Yahoo; 2) si Yahoo falla, la SEC (EDGAR, fuente oficial) para
+    cualquier empresa que reporte en EE.UU. Solo se guardan las respuestas buenas."""
     store, now = _info_store(), pd.Timestamp.now().timestamp()
     out = {t: store[t][1] for t in tickers if t in store and now - store[t][0] < ttl}
     faltan = [t for t in tickers if t not in out]
     bad = []
     if faltan:
         got, bad = sm.fetch_infos(faltan, workers=4)
+        for t in bad[:sec_max]:                     # respaldo oficial: SEC EDGAR
+            price = float(close[t].dropna().iloc[-1]) if close is not None and t in close and close[t].notna().any() else None
+            info = sec_data.build_info(t, price=price, beta=_beta(close, t))
+            if info:
+                got[t] = info
+        bad = [t for t in faltan if t not in got]
         for t, i in got.items():
             store[t] = (now, i)
         out.update(got)
     return out, bad
+
+
+def motivo(t: str) -> str:
+    return f"Yahoo: {sm.LAST_ERRORS.get(t, 'sin respuesta')} · SEC: {sec_data.LAST_ERROR.get(t, 'sin respuesta')}"
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -148,11 +172,12 @@ def _refresh_price_metrics(df: pd.DataFrame, close: pd.DataFrame) -> pd.DataFram
 def get_universe(tickers: tuple, target: str | None = None):
     """Métricas del universo. Orden: Yahoo en vivo para la acción analizada y las que no están en el
     snapshot; el resto sale del snapshot semanal (+ precios de hoy). Devuelve (df, reporte)."""
-    close, _, rep = get_prices(tickers, "2y")
+    close, _, rep = get_prices(tuple(tickers) + ("SPY",), "2y")
+    rep = dict(rep); rep["fallidos"] = [t for t in rep.get("fallidos", []) if t != "SPY"]
     snap, fecha = load_snapshot()
     en_snap = [t for t in tickers if t in snap.index]
     vivos = [t for t in tickers if t not in snap.index] + ([target] if target in en_snap else [])
-    infos, bad = infos_live(vivos) if vivos else ({}, [])
+    infos, bad = infos_live(vivos, close=close) if vivos else ({}, [])
     live = sm.build_universe(infos, close) if infos else pd.DataFrame()
     resto = [t for t in en_snap if t not in live.index]
     parte_snap = _refresh_price_metrics(snap.loc[resto], close) if resto else pd.DataFrame()
@@ -214,7 +239,7 @@ def peers_for(ticker: str, info: dict) -> tuple[list, str]:
     if ticker in set(u["Ticker"]):
         sector = u.set_index("Ticker").loc[ticker, "Sector"]
     else:
-        sector = sm.YAHOO_SECTOR.get(info.get("sector"), None)
+        sector = sm.YAHOO_SECTOR.get(info.get("sector"), None) or info.get("sector_es")
     if not sector:
         return UNIVERSO_ORIGINAL, "lista original (sector desconocido)"
     return list(u.loc[u["Sector"] == sector, "Ticker"]), sector
@@ -303,12 +328,12 @@ with seccion(tab_a):
             alto("Escribe un ticker.")
         info1 = {}
         if ticker not in set(u["Ticker"]):              # fuera del S&P: necesitamos Yahoo para saber su sector
-            with st.spinner("Buscando la empresa en Yahoo..."):
-                info1 = infos_live([ticker])[0].get(ticker, {})
+            with st.spinner("Buscando la empresa (Yahoo y, si falla, la SEC)..."):
+                c1_, _, _ = get_prices((ticker, "SPY"), "2y")
+                info1 = infos_live([ticker], close=c1_)[0].get(ticker, {})
             if not info1 and modo.startswith("Su sector"):
-                motivo = sm.LAST_ERRORS.get(ticker, "sin respuesta")
-                alto(f"No pude obtener datos de {ticker} ({motivo}). Si es un ticker válido, Yahoo está "
-                     "limitando al servidor de la app: intenta en unos minutos o usa 'Lista personalizada'.")
+                alto(f"No pude obtener datos de {ticker}. {motivo(ticker)}. "
+                     "Revisa el ticker; si cotiza fuera de EE.UU. (p.ej. BMV), usa 'Lista personalizada'.")
         if modo.startswith("Su sector"):
             peers, etiqueta = peers_for(ticker, info1)
         else:
@@ -323,8 +348,7 @@ with seccion(tab_a):
         ticker, uni = A["ticker"], A["uni"]
         reporte_calidad(A["rep"], A["n"])
         if ticker not in uni.index:
-            alto(f"Sin datos de {ticker}: {sm.LAST_ERRORS.get(ticker, 'Yahoo no respondió')}. "
-                 "Intenta en unos minutos.")
+            alto(f"Sin datos de {ticker}. {motivo(ticker)}.")
         met = uni.loc[ticker].to_dict()
         fs = sm.factor_scores(met, uni)
         score, conf = sm.investment_score(fs), sm.confianza(fs)
@@ -337,6 +361,9 @@ with seccion(tab_a):
 
         st.markdown(f"## {met.get('_name', ticker)} · `{ticker}`")
         st.caption(f"Comparada contra **{len(uni)} empresas** ({A['etiqueta']}) · Precio {money(met.get('_price'))}")
+        if met.get("_fuente") == "SEC EDGAR":
+            st.info(f"📄 Fundamentales tomados de la **SEC (EDGAR)** porque Yahoo no respondió · último reporte: "
+                    f"{met.get('_ultimo_reporte') or 'n/d'}. No incluye estimados de analistas.")
         m = st.columns(5)
         m[0].metric("Investment Score", f"{score:.0f} / 100" if pd.notna(score) else "N/A")
         m[1].metric("Lugar entre sus pares", f"{puesto} de {len(ranking)}")

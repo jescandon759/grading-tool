@@ -21,7 +21,7 @@ def _fake(mp):
         return pd.concat({"Close": c, "Volume": v}, axis=1)
 
     def finfo(t):
-        if t in ("SNDK", "ZZZZ"):                  # simula rate limit de Yahoo
+        if t in ("SNDK", "ZZZZ", "NEWCO"):         # simula rate limit de Yahoo
             return t, None
         g = np.random.default_rng(abs(hash(t)) % 2**32)
         return t, info(eps=g.normal(4, 3), revenueGrowth=g.normal(.08, .1), grossMargins=g.uniform(.2, .8),
@@ -38,6 +38,14 @@ def _fake(mp):
     mp.setattr(sm, "fetch_infos", lambda tickers, **k: o_fi(tickers, fetcher=finfo))
     mp.setattr(data, "fetch_fundamentals", lambda tickers, **k: o_fu(tickers, fetcher=fund1))
     mp.setattr(data, "fetch_earnings_dates", lambda tickers, **k: o_ea(tickers, fetcher=lambda t: (t, pd.Timestamp("2026-09-25"))))
+    import sec_data
+    def fake_sec(t, price=None, beta=None, **k):
+        if t != "NEWCO":
+            sec_data.LAST_ERROR[t] = "no aparece en la SEC"; return None
+        d = info(eps=3, currentPrice=price or 40, sector="Technology")
+        d.update({"fuente": "SEC EDGAR", "sector_es": "Tecnologia", "ultimo_reporte": "2026-06-30"})
+        return d
+    mp.setattr(sec_data, "build_info", fake_sec)
     import yfinance as yf
     class FakeT:
         def __init__(self, t): self.news = [{"title": "Company beats estimates, raises outlook"}]
@@ -63,6 +71,10 @@ def test_app(monkeypatch):
     # Yahoo falla para una accion del S&P 500 -> sale del snapshot semanal
     at.text_input[0].set_value("SNDK"); _click(at, "🎯 Analizar")
     assert "SNDK" in at.session_state["an"]["uni"].index
+    # fuera del S&P, Yahoo falla, la SEC responde -> se analiza igual
+    at.text_input[0].set_value("NEWCO"); _click(at, "🎯 Analizar")
+    assert "NEWCO" in at.session_state["an"]["uni"].index
+    assert any("SEC (EDGAR)" in str(i.value) for i in at.info)
     # fuera del S&P y Yahoo falla -> mensaje claro, sin romper la app
     at.text_input[0].set_value("ZZZZ")
     [b for b in at.button if b.label.startswith("🎯 Analizar")][0].click(); at.run(timeout=900)
