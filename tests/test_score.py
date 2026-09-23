@@ -40,3 +40,7 @@ def test_rank_universe_and_backtest():
     assert rk["Score"].notna().all() and rk["Momentum"].between(0, 100).all()
     f = sm.bt_features(prices)
     assert set(f) == set(sm.BT_FEATS)
+
+
+def test_rank_universe_empty():
+    assert sm.rank_universe(pd.DataFrame()).empty

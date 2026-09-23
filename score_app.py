@@ -494,6 +494,9 @@ with seccion(tab_r):
                 else UNIVERSO_ORIGINAL if alcance.startswith("Lista") else list(u["Ticker"]))
         with st.spinner(f"Descargando {len(tick)} empresas..."):
             uni, rep = get_universe(tuple(sorted(tick)))
+        if len(uni) < 5:
+            alto("No hay datos suficientes: Yahoo no respondió y todavía no hay snapshot semanal para este "
+                 "universo. Intenta en unos minutos.")
         rk = sm.rank_universe(uni)
         if alcance.startswith("S&P"):   # universo mixto: re-calcular por sector para comparar peras con peras
             partes = [sm.rank_universe(uni[uni["_sector"] == s]) for s in uni["_sector"].unique()

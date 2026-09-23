@@ -246,6 +246,9 @@ def explicar(fs: dict):
 
 def rank_universe(uni: pd.DataFrame) -> pd.DataFrame:
     """Investment Score de TODAS las empresas del universo (misma regla que la individual)."""
+    cols = ["Empresa", "Sector", "Score", "Confianza", *FACTORES, "Momentum", "Recomendación"]
+    if uni is None or uni.empty:
+        return pd.DataFrame(columns=cols)
     filas = {}
     for t in uni.index:
         fs = factor_scores(uni.loc[t].to_dict(), uni)
