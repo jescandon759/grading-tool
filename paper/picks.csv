@@ -1,0 +1,11 @@
+ticker,rank,score,senal,sector,fecha_senal
+CSX,1,76.28399117310177,Reversion,Industrial,2026-09-21
+UNP,2,76.25080501909068,Reversion,Industrial,2026-09-21
+FDX,3,72.3289305286588,Reversion,Industrial,2026-09-21
+ALL,4,71.10173206257777,Reversion,Financiero,2026-09-21
+NUE,5,71.01405767655385,Momentum,Materiales,2026-09-21
+WBD,6,70.00565771793222,Eventos,Comunicaciones,2026-09-21
+BNY,7,69.96742301657349,Momentum,Financiero,2026-09-21
+FANG,8,68.23203234623776,Reversion,Energia,2026-09-21
+STT,9,68.1333225587505,Momentum,Financiero,2026-09-21
+VZ,11,67.2264757119015,Reversion,Comunicaciones,2026-09-21
