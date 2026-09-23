@@ -253,7 +253,7 @@ def rank_universe(uni: pd.DataFrame) -> pd.DataFrame:
     return df.sort_values("Score", ascending=False)
 
 
-# ---------------------------------------------------------------- BACKTEST MOMENTUM (mensual)
+# ---------------------------------------------------------------- SENALES PARA BACKTEST
 BT_FEATS = list(MOM_PESOS)
 
 
@@ -263,75 +263,3 @@ def bt_features(prices: pd.DataFrame) -> dict:
             "dist_sma50": prices / prices.rolling(50).mean() - 1,
             "dist_sma200": prices / prices.rolling(200).mean() - 1,
             "mom_vol": prices.pct_change(fill_method=None).rolling(63).std() * np.sqrt(252)}
-
-
-def bt_prep(prices, spx, rebal=21, start=252):
-    """Pre-calcula percentiles por fecha de rebalanceo (solo datos hasta esa fecha)."""
-    feats = bt_features(prices); pasos = []
-    for i in range(start, len(prices) - rebal, rebal):
-        valid = prices.iloc[i].notna()
-        pm = {}
-        for k in BT_FEATS:
-            r = feats[k].iloc[i].where(valid).rank(pct=True) * 100
-            pm[k] = (r if MOM_DIRS[k] > 0 else 100 - r).fillna(50)
-        pasos.append({"fecha": prices.index[i], "pmat": pd.DataFrame(pm), "valid": valid,
-                      "fwd": prices.iloc[i + rebal] / prices.iloc[i] - 1,
-                      "b": spx.iloc[i + rebal] / spx.iloc[i] - 1,
-                      "fwd12": (prices.iloc[i + 252] / prices.iloc[i] - 1) if i + 252 < len(prices) else None,
-                      "b12": (spx.iloc[i + 252] / spx.iloc[i] - 1) if i + 252 < len(prices) else None})
-    return pasos
-
-
-def bt_run(pasos, topn, pesos, cost_bps=10.0):
-    w = np.array([pesos[k] for k in BT_FEATS], float)
-    w = w / w.sum() if w.sum() > 0 else w
-    rs, rb, ics, fechas, hit12, prev = [], [], [], [], [], set()
-    for p in pasos:
-        sc = pd.Series(p["pmat"][BT_FEATS].values @ w, index=p["pmat"].index).where(p["valid"]).dropna()
-        top = list(sc.sort_values(ascending=False).head(topn).index)
-        if not top:
-            continue
-        turnover = 1.0 if not prev else len(set(top) - prev) / len(top)
-        prev = set(top)
-        rs.append(p["fwd"][top].mean() - turnover * 2 * cost_bps / 1e4)
-        rb.append(p["b"]); fechas.append(p["fecha"])
-        f = p["fwd"].reindex(sc.index)
-        ok = f.notna()
-        if ok.sum() > 10:
-            ics.append(sc[ok].corr(f[ok], method="spearman"))
-        if p["fwd12"] is not None:
-            hit12.append(float(p["fwd12"][top].mean() > p["b12"]))
-    rs, rb = np.array(rs), np.array(rb)
-    return {"rs": rs, "rb": rb, "ic": np.array(ics),
-            "eq_s": pd.Series(np.cumprod(1 + rs), index=fechas),
-            "eq_b": pd.Series(np.cumprod(1 + rb), index=fechas),
-            "hit12": float(np.mean(hit12)) if hit12 else np.nan, "n": len(rs)}
-
-
-def bt_metricas(res, rf=0.04):
-    rs, rb = res["rs"], res["rb"]
-    ann = lambda r: float(np.prod(1 + r) ** (12 / len(r)) - 1) if len(r) else np.nan
-    vol = lambda r: float(r.std() * np.sqrt(12))
-    dd = lambda eq: float((eq / eq.cummax() - 1).min())
-    ic = res["ic"]
-    return {"cagr_s": ann(rs), "cagr_b": ann(rb), "exceso": ann(rs) - ann(rb),
-            "sharpe_s": (ann(rs) - rf) / vol(rs) if vol(rs) > 0 else np.nan,
-            "sharpe_b": (ann(rb) - rf) / vol(rb) if vol(rb) > 0 else np.nan,
-            "mdd_s": dd(res["eq_s"]), "mdd_b": dd(res["eq_b"]), "hit12": res["hit12"], "n": res["n"],
-            "ic": float(ic.mean()) if len(ic) else np.nan,
-            "ic_t": float(ic.mean() / ic.std(ddof=1) * np.sqrt(len(ic))) if len(ic) > 2 and ic.std() > 0 else np.nan}
-
-
-def bt_optimizar_oos(pasos, topn=10, cost_bps=10.0):
-    """70% train / 30% test: optimiza pesos en train y los juzga en test."""
-    from scipy.optimize import minimize
-    c = int(len(pasos) * 0.7); train, test = pasos[:c], pasos[c:]
-    exceso = lambda ps, pesos: bt_metricas(bt_run(ps, topn, pesos, cost_bps))["exceso"]
-    base = dict.fromkeys(BT_FEATS, 1.0)
-    res = minimize(lambda wv: -exceso(train, dict(zip(BT_FEATS, np.clip(wv, 0, None) + 1e-9))),
-                   np.ones(len(BT_FEATS)), method="Nelder-Mead",
-                   options={"maxiter": 200, "xatol": 1e-3, "fatol": 1e-4})
-    w = np.clip(res.x, 0, None) + 1e-9; po = dict(zip(BT_FEATS, w))
-    return {"base_train": exceso(train, base), "base_test": exceso(test, base),
-            "opt_train": exceso(train, po), "opt_test": exceso(test, po),
-            "pesos": {k: round(float(v), 2) for k, v in zip(BT_FEATS, w / w.sum())}}

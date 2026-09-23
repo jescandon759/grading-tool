@@ -19,6 +19,8 @@ import streamlit as st
 
 import data
 import factors as fx
+import backtest as bt
+import research as rs
 import score_model as sm
 import screener as sc
 
@@ -208,7 +210,7 @@ with seccion(tab_a):
     if modo == "Lista personalizada":
         uni_txt = st.text_area("Tickers de pares (coma)", ", ".join(UNIVERSO_ORIGINAL), height=90)
 
-    if st.button("🎯 Analizar", type="primary", use_container_width=True):
+    if st.button("🎯 Analizar", type="primary", width="stretch"):
         if not ticker:
             alto("Escribe un ticker.")
         with st.spinner("Buscando la empresa..."):
@@ -263,7 +265,7 @@ with seccion(tab_a):
         fig.update_layout(title="Desglose por factores (percentil vs pares)", xaxis_range=[0, 105],
                           height=360, margin=dict(t=50, b=10), yaxis=dict(autorange="reversed"),
                           legend=dict(orientation="h"))
-        g1.plotly_chart(fig, use_container_width=True)
+        g1.plotly_chart(fig, width="stretch")
         with g2:
             st.markdown("**✅ Factores más fuertes**")
             for f in pos or ["(ninguno destaca)"]: st.write(f"- {f}")
@@ -275,7 +277,7 @@ with seccion(tab_a):
         with st.expander("Ver cada métrica (valor y percentil)"):
             filas = [{"Factor": f, "Métrica": sm.ETIQUETAS.get(k, k), "Valor": v, "Percentil": p}
                      for f in FACS for k, v, p in fs[f]["det"]]
-            st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True,
+            st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True,
                          column_config={**progress_cols(["Percentil"]),
                                         "Valor": st.column_config.NumberColumn(format="%.3f")})
 
@@ -286,7 +288,7 @@ with seccion(tab_a):
         cols = ["Empresa", "Score", "Momentum", *FACS, "Confianza"]
         st.dataframe(top[cols].style.apply(
             lambda r: ["background-color: rgba(44,111,187,.18)" if r.name == ticker else "" for _ in r], axis=1),
-            use_container_width=True, column_config=progress_cols(["Score", "Momentum", *FACS, "Confianza"]))
+            width="stretch", column_config=progress_cols(["Score", "Momentum", *FACS, "Confianza"]))
 
         st.divider()
         st.subheader("📈 Momentum (¿buen momento?)")
@@ -355,15 +357,15 @@ with seccion(tab_a):
             tf["Margen neto"] = tf["Utilidad neta"] / tf["Ventas"]; tf["Crec. ventas"] = tf["Ventas"].pct_change()
             st.dataframe(tf.style.format({"Ventas": "${:,.1f}B", "Utilidad neta": "${:,.1f}B",
                                           "Margen neto": "{:.1%}", "Crec. ventas": "{:+.1%}"}, na_rep="—"),
-                         use_container_width=True, hide_index=True)
+                         width="stretch", hide_index=True)
         else:
             st.info("Sin estados financieros anuales.")
 
         st.subheader("⏳ Historia de la acción vs S&P 500 (10 años)")
         px10, _, _ = get_prices((ticker, "^GSPC"), "10y")
-        bt = backtest_stock(px10[ticker], px10["^GSPC"]) if {ticker, "^GSPC"} <= set(px10.columns) else None
-        if bt:
-            o, sn, mn = bt
+        hist = backtest_stock(px10[ticker], px10["^GSPC"]) if {ticker, "^GSPC"} <= set(px10.columns) else None
+        if hist:
+            o, sn, mn = hist
             b = st.columns(4)
             b[0].metric("CAGR", pct(o["cagr_s"]), f"{pct(o['cagr_s'] - o['cagr_m'])} vs S&P")
             b[1].metric("Le gana al S&P (ventanas 1 año)", f"{o['win_rate']:.0f}%")
@@ -377,13 +379,13 @@ with seccion(tab_a):
                              go.Scatter(x=mn.index, y=mn, name="S&P 500", line=dict(color=GRIS, dash="dash"))])
             fig.update_layout(title="¿En cuánto se convirtió $1?", height=360, margin=dict(t=50, b=10),
                               legend=dict(orientation="h"))
-            h1.plotly_chart(fig, use_container_width=True)
+            h1.plotly_chart(fig, width="stretch")
             g = sn.groupby(sn.index.year); ya = g.last() / g.first() - 1
             fig = px.bar(x=ya.index.astype(str), y=ya.values, title=f"Rendimiento por año de {ticker}",
                          labels={"x": "", "y": ""}, color=ya.values > 0,
                          color_discrete_map={True: VERDE, False: ROJO})
             fig.update_yaxes(tickformat=".0%"); fig.update_layout(height=360, showlegend=False, margin=dict(t=50, b=10))
-            h2.plotly_chart(fig, use_container_width=True)
+            h2.plotly_chart(fig, width="stretch")
             st.caption("Desempeño PASADO de esta acción; no prueba el score. Sesgo de supervivencia: es una acción que sobrevivió.")
         else:
             st.info("No hay suficiente historia de precios.")
@@ -394,7 +396,7 @@ with seccion(tab_r):
     r1, r2 = st.columns(2)
     alcance = r1.selectbox("Universo", ["Un sector del S&P 500", "Lista original (71)", "S&P 500 completo (5-8 min 1ª vez)"])
     sector_sel = r2.selectbox("Sector", sorted(u["Sector"].unique()), disabled=not alcance.startswith("Un sector"))
-    if st.button("🏆 Calcular ranking", type="primary", use_container_width=True):
+    if st.button("🏆 Calcular ranking", type="primary", width="stretch"):
         tick = (list(u.loc[u["Sector"] == sector_sel, "Ticker"]) if alcance.startswith("Un sector")
                 else UNIVERSO_ORIGINAL if alcance.startswith("Lista") else list(u["Ticker"]))
         with st.spinner(f"Descargando {len(tick)} empresas..."):
@@ -412,13 +414,13 @@ with seccion(tab_r):
         mc = st.slider("Confianza mínima de datos (%)", 0, 100, 60, 5)
         v = rk[rk["Confianza"] >= mc]
         cols = ["Empresa", "Sector", "Score", "Recomendación", "Momentum", *FACS, "Confianza"]
-        st.dataframe(v[cols], use_container_width=True, height=560,
+        st.dataframe(v[cols], width="stretch", height=560,
                      column_config=progress_cols(["Score", "Momentum", *FACS, "Confianza"]))
         fig = px.scatter(v.reset_index(), x="Score", y="Momentum", hover_name="index", color="Sector",
                          hover_data=["Empresa"], title="Fundamentales (Score) vs momentum")
         fig.add_hline(y=50, line_dash="dot", line_color=GRIS); fig.add_vline(x=50, line_dash="dot", line_color=GRIS)
         fig.update_layout(height=460, margin=dict(t=50, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         st.caption("Arriba a la derecha = buena empresa y buen momento. Descarga para seguir investigando.")
         st.download_button("⬇️ Descargar CSV", v.to_csv().encode(), "ranking_investment_score.csv", "text/csv")
 
@@ -439,7 +441,7 @@ with seccion(tab_s):
         f1, f2 = st.columns(2)
         min_dv = f1.number_input("Volumen diario mínimo (USD millones)", 0.0, 500.0, 10.0, 1.0)
         min_px = f2.number_input("Precio mínimo (USD)", 0.0, 100.0, 5.0, 1.0)
-    if st.button("📅 Correr screener de la semana", type="primary", use_container_width=True):
+    if st.button("📅 Correr screener de la semana", type="primary", width="stretch"):
         tick = list(dict.fromkeys((list(u["Ticker"]) if usar_sp else []) + data.parse_tickers(extra_txt)))
         sectors = u.set_index("Ticker")["Sector"].reindex(tick).fillna("Fuera del S&P")
         with st.spinner(f"Descargando precios de {len(tick)} acciones (~30-90 s la 1ª vez)..."):
@@ -467,7 +469,7 @@ with seccion(tab_s):
                             "Rend 3m", "Volatilidad", "Tendencia", "Reporta en (dias)"] if c in view]
         cfg = progress_cols(["Score", *sc.ESTRATEGIAS])
         cfg.update({c: st.column_config.NumberColumn(c, format="percent") for c in ["Rend 1 sem", "Rend 3m", "Volatilidad"]})
-        st.dataframe(view[cols].head(30), use_container_width=True, height=560, column_config=cfg)
+        st.dataframe(view[cols].head(30), width="stretch", height=560, column_config=cfg)
         st.download_button("⬇️ Ranking completo (CSV)", S["rank"].to_csv().encode(),
                            f"screener_{S['fecha']:%Y%m%d}.csv", "text/csv")
         wv = S["w"]; top15 = view.head(15)
@@ -475,7 +477,7 @@ with seccion(tab_s):
         fig = px.bar(contrib.reset_index().melt(id_vars="index"), x="index", y="value", color="variable",
                      labels={"index": "", "value": "Aporte al score", "variable": "Estrategia"},
                      title="¿De dónde sale el score? (Top 15)")
-        fig.update_layout(height=360, margin=dict(t=50, b=10)); st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(height=360, margin=dict(t=50, b=10)); st.plotly_chart(fig, width="stretch")
         sel = st.selectbox("🔎 Investigar una acción", list(view.index), key="scr_sel")
         if sel:
             r = S["rank"].loc[sel]
@@ -486,7 +488,7 @@ with seccion(tab_s):
                 fig = px.bar(x=dd.values, y=dd.index, orientation="h", range_x=[0, 100],
                              labels={"x": "Percentil", "y": ""}, title="Desglose")
                 fig.update_layout(height=max(300, 22 * len(dd)), margin=dict(t=40, b=10))
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
                 if pd.notna(r.get("Reporta en (dias)", np.nan)):
                     st.warning(f"📣 Reporta en {int(r['Reporta en (dias)'])} días.")
                 st.caption("Para el Investment Score completo, analízala en la pestaña 🎯.")
@@ -497,82 +499,201 @@ with seccion(tab_s):
                                             line=dict(color=c_, dash="dot")) for n_, c_ in [(50, NARANJA), (200, GRIS)]])
                 fig.update_layout(title=f"{sel} · último año", height=400, margin=dict(t=50, b=10),
                                   legend=dict(orientation="h"))
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
 # ---------------------------------------------------------------- 4. BACKTESTS
-with seccion(tab_b):
-    st.warning("Solo se pueden probar sin trampa las señales de PRECIO: los fundamentales de Yahoo son los de hoy. "
-               "Hay sesgo de supervivencia (miembros actuales del índice). El resultado FUERA DE MUESTRA manda.")
-    st.subheader("A) Momentum mensual del Investment Score")
-    x1, x2, x3 = st.columns(3)
-    uni_bt = x1.selectbox("Universo", ["Lista original (71)", "S&P 500 completo"], key="uni_bt")
-    topn_bt = x2.slider("Acciones por mes", 5, 30, 10, key="topn_bt")
-    cost_bt = x3.slider("Costo por operación (pb)", 0, 50, 10, 5, key="cost_bt")
-    if st.button("⏳ Correr backtest mensual", use_container_width=True):
-        tick = UNIVERSO_ORIGINAL if uni_bt.startswith("Lista") else list(u["Ticker"])
-        with st.spinner("Descargando 10 años y corriendo walk-forward (1-3 min)..."):
-            close, _, rep = get_prices(tuple(tick) + ("^GSPC",), "10y")
-            if "^GSPC" not in close:
-                alto("No se pudo bajar el S&P 500.")
-            spx = close["^GSPC"].dropna(); prices = close.drop(columns="^GSPC").reindex(spx.index)
-            pasos = sm.bt_prep(prices, spx)
-            res = sm.bt_run(pasos, topn_bt, dict.fromkeys(sm.BT_FEATS, 1.0), cost_bt)
-            st.session_state["btm"] = dict(res=res, m=sm.bt_metricas(res), o=sm.bt_optimizar_oos(pasos, topn_bt, cost_bt))
-    B = st.session_state.get("btm")
-    if B:
-        mb, o, res = B["m"], B["o"], B["res"]
-        k = st.columns(5)
-        k[0].metric("CAGR estrategia (neto)", pct(mb["cagr_s"]), f"{pct(mb['exceso'])} vs S&P")
-        k[1].metric("CAGR S&P 500", pct(mb["cagr_b"]))
-        k[2].metric("Sharpe", f"{mb['sharpe_s']:.2f}", f"S&P {mb['sharpe_b']:.2f}", delta_color="off")
-        k[3].metric("IC promedio", f"{mb['ic']:.3f}", f"t = {mb['ic_t']:.1f}", delta_color="off",
-                    help="Correlación entre el score y el rendimiento del mes siguiente. t ≥ 2 = poco probable que sea suerte.")
-        k[4].metric("Gana al S&P a 12m", f"{mb['hit12'] * 100:.0f}%")
-        fig = go.Figure([go.Scatter(x=res["eq_s"].index, y=res["eq_s"], name="Momentum (neto)", line_color=AZUL),
-                         go.Scatter(x=res["eq_b"].index, y=res["eq_b"], name="S&P 500", line=dict(color=GRIS, dash="dash"))])
-        fig.update_layout(title="Crecimiento de $1", height=380, margin=dict(t=50, b=10), legend=dict(orientation="h"))
-        st.plotly_chart(fig, use_container_width=True)
-        st.write(f"Fuera de muestra (30% final): pesos iguales **{pct(o['base_test'])}** · "
-                 f"optimizados **{pct(o['opt_test'])}** (en train: {pct(o['base_train'])} / {pct(o['opt_train'])})")
-        if o["opt_test"] < o["base_test"]:
-            st.error("🔴 Optimizar pesos empeoró fuera de muestra → sobreajuste. Quédate con pesos iguales.")
-        else:
-            st.success("🟢 Los pesos optimizados sobreviven fuera de muestra (con cautela).")
-        st.caption(f"Pesos optimizados: {o['pesos']}")
+@st.cache_data(ttl=24 * 3600, show_spinner=False)
+def bt_data(years: int):
+    """Mismo universo y datos para A y B: todos los que fueron miembros del S&P 500 en el periodo
+    (point-in-time) + SPY con dividendos como benchmark."""
+    inicio = pd.Timestamp.today() - pd.DateOffset(years=years)
+    tick = data.members_between(inicio)
+    close, vol, rep = data.download_prices(tick + ["SPY"], period=f"{years + 1}y")
+    if "SPY" not in close:
+        raise ValueError("Yahoo no devolvió SPY (benchmark). Intenta en unos minutos.")
+    m = data.sp500_membership()
+    ex = set(m.loc[m["end"].notna() & (m["end"] > inicio), "ticker"])
+    cob = {"total": len(tick), "con_datos": len([t for t in tick if t in close]),
+           "ex_miembros": len(ex), "ex_con_datos": len([t for t in ex if t in close])}
+    return close, vol, rep, cob
 
-    st.divider()
-    st.subheader("B) Señales del screener semanal (S&P 500)")
-    y1, y2, y3 = st.columns(3)
-    per_w = y1.selectbox("Historia", ["3y", "5y", "10y"], 1)
-    topn_w = y2.slider("Top N por semana", 5, 50, 20, 5)
-    cost_w = y3.slider("Costo por operación (pb) ", 0, 50, 10, 5)
-    if st.button("🧪 Correr validación semanal", use_container_width=True):
-        tick = tuple(u["Ticker"])
-        with st.spinner("Descargando historia y corriendo (1-3 min la 1ª vez)..."):
-            close, vol, rep = get_prices(tick, per_w)
-            st.session_state["btw"] = sc.walk_forward(close, vol, u.set_index("Ticker")["Sector"],
-                                                      top_n=topn_w, cost_bps=float(cost_w))
-    if "btw" in st.session_state:
-        res = st.session_state["btw"]
-        tabla = pd.DataFrame([{"Estrategia": k, "Veredicto": sc.verdict(v["resumen"])[0], **v["resumen"]}
-                              for k, v in res.items()]).set_index("Estrategia")
-        st.dataframe(tabla.style.format({
-            "IC promedio": "{:.3f}", "IC t-stat": "{:.2f}", "% semanas IC>0": "{:.0%}",
-            "Spread Q5-Q1 semanal": "{:.2%}", "Top N anual (neto)": "{:.1%}", "Universo anual": "{:.1%}",
-            "Exceso anual": "{:+.1%}", "% semanas le gana al universo": "{:.0%}",
-            "Max caida Top N": "{:.1%}", "Rotacion semanal": "{:.0%}"}), use_container_width=True)
-        est = st.selectbox("Detalle de", list(res))
-        wk = res[est]["semanal"]
-        z1, z2 = st.columns(2)
-        curva = pd.DataFrame({"Top N (neto)": (1 + wk["Top N neto"]).cumprod(), "Universo": (1 + wk["Universo"]).cumprod()})
-        fig = px.line(curva, title=f"{est}: crecimiento de $1", color_discrete_sequence=[VERDE, GRIS])
-        fig.update_layout(height=360, margin=dict(t=50, b=10), legend=dict(orientation="h"), yaxis_title="", xaxis_title="")
-        z1.plotly_chart(fig, use_container_width=True)
-        q = wk[[f"Q{i}" for i in range(1, 6)]].mean() * 52
-        fig = px.bar(x=["Q1 peor", "Q2", "Q3", "Q4", "Q5 mejor"], y=q.values, title="Rendimiento anualizado por quintil",
-                     color=q.values, color_continuous_scale="RdYlGn", labels={"x": "", "y": ""})
-        fig.update_yaxes(tickformat=".0%"); fig.update_layout(height=360, margin=dict(t=50, b=10), coloraxis_showscale=False)
-        z2.plotly_chart(fig, use_container_width=True)
+
+@st.cache_data(ttl=24 * 3600, show_spinner=False)
+def run_a(years: int, top_n: int, cost: float):
+    close, vol, rep, cob = bt_data(years)
+    bench = close["SPY"]; px_ = close.drop(columns="SPY")
+    mask_fn = lambda d: data.membership_mask(d, px_.columns)
+    return rs.study_a(px_, bench, mask_fn, u.set_index("Ticker")["Sector"], top_n, cost), cob
+
+
+@st.cache_data(ttl=24 * 3600, show_spinner=False)
+def run_b(years: int, top_n: int, cost: float):
+    close, vol, rep, cob = bt_data(years)
+    bench = close["SPY"]; px_ = close.drop(columns="SPY")
+    v = vol.drop(columns="SPY", errors="ignore") if not vol.empty else None
+    mask_fn = lambda d: data.membership_mask(d, px_.columns)
+    return rs.study_b(px_, v, bench, mask_fn, u.set_index("Ticker")["Sector"], top_n, cost), cob
+
+
+def show_check(check, ver):
+    lab, col = ver
+    {"green": st.success, "orange": st.warning, "red": st.error}[col](
+        f"**Veredicto: {lab}** · cumple {sum(ok for *_, ok in check)} de {len(check)} condiciones")
+    st.dataframe(pd.DataFrame([{"": "✅" if ok else "❌", "Condición": c, "Resultado": v} for c, v, ok in check]),
+                 width="stretch", hide_index=True)
+
+
+FMT = {"IC promedio": "{:.3f}", "IC t-stat": "{:.2f}", "% periodos IC>0": "{:.0%}", "Spread Q5-Q1 anual": "{:+.1%}",
+       "Monotonía quintiles": "{:.2f}", "Top N anual (neto)": "{:.1%}", "Universo anual": "{:.1%}",
+       "SPY anual": "{:.1%}", "Exceso vs universo": "{:+.1%}", "Exceso vs SPY": "{:+.1%}",
+       "Sharpe (neto)": "{:.2f}", "Max caída": "{:.0%}", "Rotación por periodo": "{:.0%}",
+       "% periodos gana al universo": "{:.0%}", "Periodos": "{:.0f}"}
+
+
+def curva(r, titulo):
+    c = pd.DataFrame({"Top N (neto)": (1 + r["Top N neto"]).cumprod(), "Universo (igual peso)": (1 + r["Universo"]).cumprod(),
+                      "SPY (con dividendos)": (1 + r["Benchmark"]).cumprod()})
+    fig = px.line(c, title=titulo, color_discrete_sequence=[AZUL, GRIS, NARANJA])
+    fig.update_layout(height=360, margin=dict(t=50, b=10), legend=dict(orientation="h"), yaxis_title="", xaxis_title="")
+    return fig
+
+
+def quintiles(r, ppy):
+    q = r[[f"Q{i}" for i in range(1, 6)]].mean() * ppy
+    fig = px.bar(x=["Q1 peor", "Q2", "Q3", "Q4", "Q5 mejor"], y=q.values, title="Rendimiento anual por quintil del score",
+                 color=q.values, color_continuous_scale="RdYlGn", labels={"x": "", "y": ""})
+    fig.update_yaxes(tickformat=".0%"); fig.update_layout(height=360, margin=dict(t=50, b=10), coloraxis_showscale=False)
+    return fig
+
+
+def heat(g, titulo):
+    fig = px.imshow(g, text_auto=".1%", color_continuous_scale="RdYlGn", color_continuous_midpoint=0,
+                    title=titulo, aspect="auto")
+    fig.update_layout(height=300, margin=dict(t=50, b=10), coloraxis_showscale=False)
+    return fig
+
+
+def show_alpha(al, al_mkt=None):
+    cols = st.columns(3)
+    if al_mkt:
+        cols[0].metric("Alpha vs mercado", pct(al_mkt.get("Alpha anual")), f"t = {al_mkt.get('Alpha t-stat', np.nan):.2f}",
+                       delta_color="off", help="Rendimiento propio después de quitar la exposición al S&P 500 (beta).")
+    if al:
+        cols[1].metric("Alpha vs mercado + momentum clásico", pct(al.get("Alpha anual")),
+                       f"t = {al.get('Alpha t-stat', np.nan):.2f}", delta_color="off",
+                       help="Si se va a ~0, el modelo solo 'empaqueta' el momentum clásico 12-1.")
+        cols[2].metric("Beta de mercado", f"{al.get('Beta Mercado (SPY)', np.nan):.2f}")
+
+
+with seccion(tab_b):
+    st.info("**Mismo pipeline para A y B:** universo histórico del S&P 500 (solo cuentan las empresas que eran "
+            "miembros en cada fecha) · la señal se calcula al cierre y se opera al **día siguiente** · benchmark "
+            "**SPY con dividendos** · costos sobre la rotación real · el t exigido sube con el número de modelos probados. "
+            "Solo se prueban señales de PRECIO (los fundamentales de Yahoo son los de hoy).")
+    k1, k2 = st.columns(2)
+    years = k1.selectbox("Años de prueba", [5, 10], 1, help="Se descarga 1 año extra para calcular señales.")
+    cost = float(k2.slider("Costo + slippage por operación (pb)", 0, 50, 10, 5, help="10 pb = 0.10% por compra o venta."))
+    ta, tb = st.tabs(["A) Momentum mensual del score", "B) Estrategias del screener semanal"])
+
+    with ta:
+        st.caption("Pregunta: **¿puedo construir un portafolio con este ranking?** Cada ~21 días compra el Top N por "
+                   "momentum, igual peso, y lo mantiene hasta el siguiente rebalanceo.")
+        top_a = st.slider("Top N", 5, 30, 10, 5, key="topa")
+        if st.button("⏳ Correr estudio A (2-5 min la 1ª vez)", width="stretch"):
+            with st.spinner("Descargando historia del universo point-in-time y corriendo pruebas..."):
+                try:
+                    st.session_state["A"] = run_a(years, top_a, cost)
+                except Exception as ex:
+                    alto(f"No se pudo correr el estudio A: {ex}")
+        if "A" in st.session_state:
+            A, cob = st.session_state["A"]; ppy = A["ppy"]
+            st.caption(f"Cobertura: {cob['con_datos']}/{cob['total']} tickers con precios · ex-miembros con datos: "
+                       f"{cob['ex_con_datos']}/{cob['ex_miembros']} (los que faltan suelen ser quiebras o adquisiciones: "
+                       "el sesgo de supervivencia se reduce, no desaparece).")
+            show_check(A["check"], A["veredicto"])
+            m = bt.summarize(A["main"], ppy)
+            k = st.columns(5)
+            k[0].metric("Top N anual (neto)", pct(m["Top N anual (neto)"]))
+            k[1].metric("vs universo", pct(m["Exceso vs universo"])); k[2].metric("vs SPY", pct(m["Exceso vs SPY"]))
+            k[3].metric("Sharpe neto", f"{m['Sharpe (neto)']:.2f}"); k[4].metric("Peor caída", pct(m["Max caída"], 0))
+            g1, g2 = st.columns(2)
+            g1.plotly_chart(curva(A["main"], "App actual: crecimiento de $1"), width="stretch")
+            g2.plotly_chart(quintiles(A["main"], ppy), width="stretch")
+
+            st.subheader("1. Fuera de muestra (walk-forward anidado)")
+            st.caption("Cada año elige el mejor modelo con los 5 años previos y lo prueba en el año siguiente, que no vio.")
+            if not A["wf"].empty:
+                st.dataframe(A["wf"].style.format({"Exceso en entrenamiento": "{:+.1%}", "Exceso fuera de muestra": "{:+.1%}"}),
+                             width="stretch", hide_index=True)
+                st.write(f"**Exceso anual fuera de muestra: {pct(A['oos_exc'])}** vs universo.")
+
+            st.subheader("2. ¿Qué aporta cada bloque? (ablación)")
+            st.dataframe(A["ablacion"][["IC promedio", "IC t-stat", "Spread Q5-Q1 anual", "Exceso vs universo",
+                                        "Sharpe (neto)", "Max caída"]].style.format(FMT), width="stretch")
+            st.caption(f"Se compararon {len(rs.CONFIGS_A)} modelos: el t exigido sube a {A['t_crit']:.2f}.")
+            fig = px.imshow(A["corr"], text_auto=".2f", color_continuous_scale="RdBu_r", zmin=-1, zmax=1,
+                            title="Correlación entre señales (1 = dicen lo mismo)")
+            fig.update_layout(height=420, margin=dict(t=50, b=10)); st.plotly_chart(fig, width="stretch")
+
+            st.subheader("3. Robustez")
+            r1, r2 = st.columns([2, 1])
+            if not A["grid"].empty:
+                r1.plotly_chart(heat(A["grid"], f"Exceso anual vs universo · {A['grid_pos']:.0%} de variantes positivas"),
+                                width="stretch")
+            r2.dataframe(A["costos"].to_frame().style.format("{:+.1%}"), width="stretch")
+            r2.caption("Estrés de costos (pb)")
+            st.dataframe(A["yearly"].style.format("{:+.1%}").format({"IC promedio": "{:.3f}"}), width="stretch")
+
+            st.subheader("4. ¿Alpha propio o factores conocidos?")
+            show_alpha(A["alpha"], A["alpha_mkt"])
+            n1, n2 = st.columns(2)
+            n1.metric("Concentración sectorial del Top N", f"{A['conc_sector']:.0%}",
+                      help="% promedio del portafolio en su sector más repetido. Alto = apuesta sectorial.")
+            n2.metric("Versión sector-neutral: exceso", pct(A["neutral"].get("Exceso vs universo")),
+                      help="Mismo score pero comparando cada acción solo contra su sector.")
+
+    with tb:
+        st.caption("Pregunta: **¿el score contiene información sobre el rendimiento futuro?** Cada viernes rankea, "
+                   "opera el lunes y mide la semana.")
+        top_b = st.slider("Top N", 10, 50, 20, 5, key="topb")
+        if st.button("🧪 Correr estudio B (3-8 min la 1ª vez)", width="stretch"):
+            with st.spinner("Calculando señales semana por semana..."):
+                try:
+                    st.session_state["B"] = run_b(years, top_b, cost)
+                except Exception as ex:
+                    alto(f"No se pudo correr el estudio B: {ex}")
+        if "B" in st.session_state:
+            B, cob = st.session_state["B"]; ppy = B["ppy"]
+            filas = []
+            for k, e in B["por_estrategia"].items():
+                filas.append({"Estrategia": k, "Veredicto": e["veredicto"][0],
+                              "Condiciones": f"{sum(ok for *_, ok in e['check'])}/{len(e['check'])}", **e["resumen"]})
+            tabla = pd.DataFrame(filas).set_index("Estrategia")
+            st.dataframe(tabla[["Veredicto", "Condiciones", "IC promedio", "IC t-stat", "Spread Q5-Q1 anual",
+                                "Monotonía quintiles", "Exceso vs universo", "Sharpe (neto)", "Max caída"]]
+                         .style.format(FMT), width="stretch")
+            if not B["wf"].empty:
+                with st.expander(f"Sistema completo fuera de muestra (elige cada año la mejor estrategia): "
+                                 f"{pct(B['oos_sistema'].get('Exceso vs universo'))} anual"):
+                    st.dataframe(B["wf"].style.format({"Exceso en entrenamiento": "{:+.1%}",
+                                                       "Exceso fuera de muestra": "{:+.1%}"}),
+                                 width="stretch", hide_index=True)
+            est = st.selectbox("Detalle de", list(B["por_estrategia"]))
+            e = B["por_estrategia"][est]; r = B["res"][est]
+            show_check(e["check"], e["veredicto"])
+            st.caption("En B, 'fuera de muestra' = segunda mitad del periodo (las reglas no se ajustaron con esos datos).")
+            g1, g2 = st.columns(2)
+            g1.plotly_chart(curva(r, f"{est}: crecimiento de $1"), width="stretch")
+            g2.plotly_chart(quintiles(r, ppy), width="stretch")
+            h1, h2 = st.columns([2, 1])
+            if not e["grid"].empty:
+                h1.plotly_chart(heat(e["grid"], f"Robustez: {e['grid_pos']:.0%} de variantes positivas"), width="stretch")
+            h2.metric("Concentración sectorial", f"{e['conc_sector']:.0%}")
+            show_alpha(e["alpha"])
+            st.dataframe(e["yearly"].style.format("{:+.1%}").format({"IC promedio": "{:.3f}"}), width="stretch")
+
+    st.caption("Siguiente paso recomendado antes de invertir: **paper trading** (seguir los picks semanales sin dinero real "
+               "durante 2-3 meses y comparar contra el backtest).")
 
 # ---------------------------------------------------------------- 5. METODOLOGIA
 with seccion(tab_m):
@@ -590,7 +711,12 @@ with seccion(tab_m):
 | Valuación con P/E, P/B, P/S, EV/EBITDA; negativos = N/A | **Yields**: Utilidad/Precio, Libros/Precio, Ventas/Precio, EBITDA/EV | Con N/A, una empresa con pérdidas quedaba *neutral*; ahora queda al fondo, que es lo correcto |
 | P/E y earnings yield juntos | Solo utilidad/precio | Eran la misma métrica contada dos veces |
 | Descarga una por una, sin reintentos | En paralelo, con reintentos y reporte de calidad | Más rápido y sabes qué falta |
-| Backtest mensual sin costos, 71 acciones | Costos, IC y opción S&P 500 completo | Saber si el momentum predice o es ruido |
+| Backtest con las acciones de hoy | Universo **histórico** del S&P 500 (miembros en cada fecha) | Reduce el sesgo de supervivencia |
+| Opera al mismo cierre de la señal | Opera al **día siguiente** | En la vida real no puedes comprar al precio con el que calculaste |
+| Benchmark ^GSPC sin dividendos | **SPY con dividendos** | Comparar peras con peras |
+| Un solo corte train/test 70/30 | **Walk-forward anidado** año por año | Ver si funciona repetidamente fuera de muestra |
+| Veredicto por t-stat | **Checklist de 10 condiciones** + corrección por pruebas múltiples | Un t ≥ 2 solo no basta |
+| — | Ablación, correlación de señales, robustez de parámetros, alpha vs momentum clásico | Saber qué aporta cada pieza y si hay alpha propio |
 | — | Ranking de pares y screener semanal | Encontrar candidatas, no solo calificar una |
 
 ### Lo que NO hace

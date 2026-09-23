@@ -80,9 +80,14 @@ def download_prices(tickers, period="2y", chunk=80, retries=3, pause=1.5, downlo
     if downloader is None:
         import yfinance as yf
 
+        validos = {"1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"}
+
         def downloader(tks, period):
-            return yf.download(tks, period=period, auto_adjust=True, progress=False,
-                               threads=True, group_by="column")
+            kw = {"period": period}
+            if period not in validos and period.endswith("y"):   # p.ej. "6y" -> fecha de inicio
+                kw = {"start": (pd.Timestamp.today() - pd.DateOffset(years=int(period[:-1]))).strftime("%Y-%m-%d")}
+            return yf.download(tks, auto_adjust=True, progress=False, threads=True,
+                               group_by="column", **kw)
 
     tickers = list(dict.fromkeys(tickers))
     closes, vols = [], []
@@ -232,3 +237,34 @@ def to_base_currency(close: pd.DataFrame, base: str, fx: pd.DataFrame) -> pd.Dat
             s = s * fx[col].reindex(s.index).ffill()
         out[t] = s
     return out
+
+
+# ---------------------------------------------------------------- UNIVERSO HISTORICO (point-in-time)
+def sp500_membership() -> pd.DataFrame:
+    """Intervalos de pertenencia al S&P 500 (ticker, start, end) desde 2005.
+    Fuente: github.com/fja05680/sp500 (historico de componentes). end vacio = sigue en el indice.
+    Sirve para que el backtest solo elija entre empresas que ERAN miembros en cada fecha."""
+    df = pd.read_csv(DATA_DIR / "sp500_membership.csv", parse_dates=["start", "end"])
+    df["ticker"] = df["ticker"].map(yahoo_symbol)
+    return df
+
+
+def members_between(start, end=None) -> list[str]:
+    """Todos los tickers que fueron miembros en algun momento del periodo."""
+    m = sp500_membership()
+    start = pd.Timestamp(start); end = pd.Timestamp(end or pd.Timestamp.today())
+    ok = (m["start"] <= end) & (m["end"].isna() | (m["end"] > start))
+    return sorted(m.loc[ok, "ticker"].unique())
+
+
+def membership_mask(dates, tickers) -> pd.DataFrame:
+    """Matriz booleana fechas x tickers: True si el ticker era miembro en esa fecha."""
+    m = sp500_membership()
+    dates = pd.DatetimeIndex(dates)
+    mask = pd.DataFrame(False, index=dates, columns=list(tickers))
+    for r in m.itertuples():
+        if r.ticker not in mask.columns:
+            continue
+        sel = (dates >= r.start) & ((dates < r.end) if pd.notna(r.end) else True)
+        mask.loc[sel, r.ticker] = True
+    return mask

@@ -38,8 +38,5 @@ def test_rank_universe_and_backtest():
     uni = sm.build_universe(infos, prices)
     rk = sm.rank_universe(uni)
     assert rk["Score"].notna().all() and rk["Momentum"].between(0, 100).all()
-    pasos = sm.bt_prep(prices, spx)
-    m = sm.bt_metricas(sm.bt_run(pasos, 10, dict.fromkeys(sm.BT_FEATS, 1.0), 10))
-    assert m["n"] > 40 and np.isfinite(m["ic"])
-    o = sm.bt_optimizar_oos(pasos, 10)
-    assert abs(sum(o["pesos"].values()) - 1) < .02
+    f = sm.bt_features(prices)
+    assert set(f) == set(sm.BT_FEATS)

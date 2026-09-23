@@ -10,11 +10,11 @@ from test_score import info
 
 def _fake(mp):
     rng = np.random.default_rng(3)
-    days = 2600
+    days = 1600
     idx = pd.bdate_range(end="2026-09-18", periods=days)
 
     def dl(tks, period):
-        n = {"2y": 520, "3y": 780, "5y": 1300, "10y": 2600}[period]
+        n = min(days, int(period[:-1]) * 260)
         r = rng.normal(0.0003, 0.017, (n, len(tks)))
         c = pd.DataFrame(50 * np.exp(np.cumsum(r, 0)), idx[-n:], tks)
         v = pd.DataFrame(rng.lognormal(14, .4, (n, len(tks))), idx[-n:], tks)
@@ -48,7 +48,8 @@ def _click(at, label):
     [b for b in at.button if b.label.startswith(label)][0].click()
     at.run(timeout=900)
     assert not at.exception, [e.value for e in at.exception]
-    assert not [e for e in at.error], [e.value for e in at.error]
+    errs = [e.value for e in at.error if not str(e.value).startswith("**Veredicto")]
+    assert not errs, errs
 
 
 def test_app(monkeypatch):
@@ -59,6 +60,7 @@ def test_app(monkeypatch):
     assert "an" in at.session_state and len(at.session_state["an"]["uni"]) > 50
     _click(at, "🏆 Calcular ranking")
     _click(at, "📅 Correr screener")
-    _click(at, "⏳ Correr backtest mensual")
-    _click(at, "🧪 Correr validación semanal")
-    assert "btw" in at.session_state and "btm" in at.session_state
+    [sb for sb in at.selectbox if sb.label == "Años de prueba"][0].set_value(5)
+    _click(at, "⏳ Correr estudio A")
+    _click(at, "🧪 Correr estudio B")
+    assert "A" in at.session_state and "B" in at.session_state
