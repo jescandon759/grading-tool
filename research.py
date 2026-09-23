@@ -93,11 +93,34 @@ def study_a(close, bench, mask_fn, sectors, top_n=10, cost_bps=10.0, every=21, g
         out["grid_pos"] = float((out["grid"] > 0).mean().mean())
     else:
         out["grid"], out["grid_pos"] = pd.DataFrame(), np.nan
+    out["construccion"] = construction_table(score_a(feats, CONFIGS_A[PRINCIPAL_A], dates, mask), close, bench,
+                                             top_n, cost_bps, sectors, ppy)
     out["t_crit"] = bt.t_critico(len(CONFIGS_A))
     out["check"] = bt.checklist(bt.summarize(main, ppy), out["yearly"], out["oos_exc"], out["grid_pos"],
                                 out["alpha"], out["t_crit"])
     out["veredicto"] = bt.veredicto(out["check"])
     return out
+
+
+def construction_table(scores, close, bench, top_n, cost_bps, sectors, ppy) -> pd.DataFrame:
+    """Mismo score, distintas reglas de portafolio: ¿cuanto aporta cada control?"""
+    ro = bt.risk_on_signal(bench)
+    variantes = {
+        "Base (Top N simple)": {},
+        "Buffer de rotación (sale fuera del Top 2N)": {"buffer": 2.0},
+        "Tope sectorial 30%": {"sectors": sectors, "sector_cap": 0.3},
+        "Filtro de régimen (efectivo si SPY < media 200d)": {"risk_on": ro},
+        "Buffer + tope sectorial": {"buffer": 2.0, "sectors": sectors, "sector_cap": 0.3},
+        "Todo junto": {"buffer": 2.0, "sectors": sectors, "sector_cap": 0.3, "risk_on": ro},
+    }
+    filas = {}
+    for n, kw in variantes.items():
+        r = bt.evaluate(scores, close, bench, top_n, cost_bps, **kw)
+        s = bt.summarize(r, ppy)
+        filas[n] = {k: s.get(k) for k in ["Top N anual (neto)", "Exceso vs universo", "Exceso vs SPY",
+                                           "Sharpe (neto)", "Max caída", "Rotación por periodo"]}
+        filas[n]["% tiempo en efectivo"] = float(r["Efectivo"].mean()) if not r.empty else np.nan
+    return pd.DataFrame(filas).T
 
 
 # ---------------------------------------------------------------- B: ESTRATEGIAS DEL SCREENER
@@ -155,5 +178,6 @@ def study_b(close, volume, bench, mask_fn, sectors, top_n=20, cost_bps=10.0, gri
         e["check"] = bt.checklist(e["resumen"], e["yearly"], oos_exc, e["grid_pos"], e["alpha"], t_crit)
         e["veredicto"] = bt.veredicto(e["check"])
         out["por_estrategia"][k] = e
+    out["construccion"] = construction_table(S["Compuesto (precio)"], close, bench, top_n, cost_bps, sectors, ppy)
     out["t_crit"] = t_crit
     return out

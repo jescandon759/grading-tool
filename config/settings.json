@@ -1,0 +1,22 @@
+{
+  "correo": {
+    "destinatarios": ["jescandon759@gmail.com"],
+    "top_n": 10,
+    "app_url": "https://grading-tool-dur5czz7bvm8w6pyh4hzjv.streamlit.app/"
+  },
+  "screener": {
+    "extra": ["SOFI", "RKLB", "IONQ", "CELH", "DUOL", "AFRM", "HIMS", "ASTS", "CRDO", "OKLO", "NU", "MELI"],
+    "candidatas_estudio": 80,
+    "volumen_min_musd": 10,
+    "precio_min": 5,
+    "pesos": {"Momentum": 0.30, "Reversion": 0.20, "Multifactor": 0.30, "Eventos": 0.20}
+  },
+  "portafolio": {
+    "top_n": 10,
+    "buffer": 2.0,
+    "tope_sector": 0.3
+  },
+  "paper_trading": {
+    "horizontes_semanas": [1, 4, 12]
+  }
+}

@@ -13,3 +13,11 @@ Módulos: `score_model.py` (score + backtest mensual), `data.py` (descargas + S&
 Pruebas sin internet: `python -m pytest tests`. Lista del índice: `python scripts/update_sp500.py`.
 
 No es asesoría financiera. Datos gratuitos de Yahoo Finance.
+
+## Automatización semanal
+- **Sábado 9:00 (GitHub Actions, `.github/workflows/weekly.yml`)**: corre `scripts/weekly_job.py` →
+  screener, portafolio (buffer 2N + tope sectorial 30%), snapshot point-in-time de fundamentales e
+  Investment Score (`snapshots/`), paper trading (`paper/`) y resumen `reports/latest.json`.
+- **Domingo 10:00 (tarea programada de Claude)**: lee `reports/latest.json` y manda el correo.
+- Destinatarios, lista extra, pesos y reglas del portafolio: **`config/settings.json`**.
+- Correr a mano: pestaña *Actions* → *Screener semanal* → *Run workflow*.

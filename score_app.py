@@ -441,6 +441,24 @@ with seccion(tab_s):
         f1, f2 = st.columns(2)
         min_dv = f1.number_input("Volumen diario mínimo (USD millones)", 0.0, 500.0, 10.0, 1.0)
         min_px = f2.number_input("Precio mínimo (USD)", 0.0, 100.0, 5.0, 1.0)
+    import json, pathlib
+    _lat = pathlib.Path(__file__).parent / "reports" / "latest.json"
+    if _lat.exists():
+        L = json.loads(_lat.read_text())
+        with st.expander(f"📬 Portafolio del correo semanal (cierre {L['datos_al_cierre']}) y paper trading", expanded=False):
+            st.write(f"Régimen: **{'alcista' if L['regimen']['alcista'] else 'bajista'}** (SPY vs media 200d) · "
+                     f"Entran: {', '.join(L['entran']) or '—'} · Salen: {', '.join(L['salen']) or '—'}")
+            st.dataframe(pd.DataFrame(L["portafolio"])[["ticker", "empresa", "sector", "score", "senal",
+                                                        "investment_score", "rend_3m", "reporta_en_dias"]],
+                         width="stretch", hide_index=True)
+            if L.get("paper_trading"):
+                st.markdown("**Paper trading (resultado real de los picks vs SPY)**")
+                st.dataframe(pd.DataFrame(L["paper_trading"]).T.style.format(
+                    {"exceso_promedio": "{:+.2%}", "tasa_acierto": "{:.0%}"}), width="stretch")
+            else:
+                st.caption("El paper trading empieza a medir resultados una semana después del primer reporte.")
+            st.caption("Se envía cada domingo a: " + ", ".join(L["destinatarios"]) +
+                       ". Para cambiar destinatarios o reglas: `config/settings.json` en GitHub.")
     if st.button("📅 Correr screener de la semana", type="primary", width="stretch"):
         tick = list(dict.fromkeys((list(u["Ticker"]) if usar_sp else []) + data.parse_tickers(extra_txt)))
         sectors = u.set_index("Ticker")["Sector"].reindex(tick).fillna("Fuera del S&P")
@@ -644,7 +662,15 @@ with seccion(tab_b):
             r2.caption("Estrés de costos (pb)")
             st.dataframe(A["yearly"].style.format("{:+.1%}").format({"IC promedio": "{:.3f}"}), width="stretch")
 
-            st.subheader("4. ¿Alpha propio o factores conocidos?")
+            st.subheader("4. Construcción del portafolio: ¿qué aporta cada control?")
+            st.dataframe(A["construccion"].style.format({"Top N anual (neto)": "{:.1%}", "Exceso vs universo": "{:+.1%}",
+                         "Exceso vs SPY": "{:+.1%}", "Sharpe (neto)": "{:.2f}", "Max caída": "{:.0%}",
+                         "Rotación por periodo": "{:.0%}", "% tiempo en efectivo": "{:.0%}"}), width="stretch")
+            st.caption("Mismo score, distintas reglas: buffer (una acción se queda mientras siga en el Top 2N), "
+                       "tope sectorial 30% y filtro de régimen. Si una regla mejora Sharpe y caída sin matar el "
+                       "rendimiento, vale la pena usarla.")
+
+            st.subheader("5. ¿Alpha propio o factores conocidos?")
             show_alpha(A["alpha"], A["alpha_mkt"])
             n1, n2 = st.columns(2)
             n1.metric("Concentración sectorial del Top N", f"{A['conc_sector']:.0%}",
@@ -678,6 +704,10 @@ with seccion(tab_b):
                     st.dataframe(B["wf"].style.format({"Exceso en entrenamiento": "{:+.1%}",
                                                        "Exceso fuera de muestra": "{:+.1%}"}),
                                  width="stretch", hide_index=True)
+            with st.expander("Construcción del portafolio (estrategia Compuesta): buffer, tope sectorial y régimen"):
+                st.dataframe(B["construccion"].style.format({"Top N anual (neto)": "{:.1%}", "Exceso vs universo": "{:+.1%}",
+                             "Exceso vs SPY": "{:+.1%}", "Sharpe (neto)": "{:.2f}", "Max caída": "{:.0%}",
+                             "Rotación por periodo": "{:.0%}", "% tiempo en efectivo": "{:.0%}"}), width="stretch")
             est = st.selectbox("Detalle de", list(B["por_estrategia"]))
             e = B["por_estrategia"][est]; r = B["res"][est]
             show_check(e["check"], e["veredicto"])

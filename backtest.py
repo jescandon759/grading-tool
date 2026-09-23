@@ -34,16 +34,43 @@ def rebalance_dates(index: pd.DatetimeIndex, every: int | None = None, weekly: b
 
 
 # ---------------------------------------------------------------- EVALUACION
+def select_portfolio(scores: pd.Series, top_n: int, prev: list | None = None, buffer: float = 1.0,
+                     sectors: pd.Series | None = None, sector_cap: float | None = None) -> list:
+    """Construccion del portafolio (misma regla en backtest, paper trading y correo):
+    - buffer: una accion que ya tienes se queda mientras siga dentro del Top (buffer x N). Baja rotacion.
+    - sector_cap: maximo % de posiciones en un mismo sector (p.ej. 0.3)."""
+    s = scores.dropna().sort_values(ascending=False)
+    rank = pd.Series(np.arange(1, len(s) + 1), index=s.index)
+    max_sec = int(np.ceil(sector_cap * top_n)) if sector_cap else top_n
+    sec = (sectors.reindex(s.index).fillna("Otro") if sectors is not None else pd.Series("x", index=s.index))
+    keep = [t for t in (prev or []) if t in rank.index and rank[t] <= buffer * top_n]
+    keep = sorted(keep, key=lambda t: rank[t])
+    out, cnt = [], {}
+    for t in keep + [t for t in s.index if t not in keep]:
+        if len(out) >= top_n:
+            break
+        g = sec[t]
+        if cnt.get(g, 0) >= max_sec:
+            continue
+        out.append(t); cnt[g] = cnt.get(g, 0) + 1
+    if len(out) < top_n:                      # si el tope no deja llenar el portafolio, se relaja
+        out += [t for t in s.index if t not in out][:top_n - len(out)]
+    return out
+
+
 def evaluate(scores: pd.DataFrame, close: pd.DataFrame, bench: pd.Series, top_n: int = 10,
-             cost_bps: float = 10.0, lag: int = 1, keep_tops: bool = False) -> pd.DataFrame:
-    """scores: fechas-de-senal x tickers (NaN = no elegible). Devuelve una fila por periodo."""
+             cost_bps: float = 10.0, lag: int = 1, keep_tops: bool = False, buffer: float = 1.0,
+             sectors: pd.Series | None = None, sector_cap: float | None = None,
+             risk_on: pd.Series | None = None) -> pd.DataFrame:
+    """scores: fechas-de-senal x tickers (NaN = no elegible). Devuelve una fila por periodo.
+    risk_on: Serie booleana por fecha de senal; False = filtro de regimen manda a efectivo."""
     idx = close.index
     close_ff = close.ffill()                     # si una accion deja de cotizar, sale a su ultimo precio
     pos = idx.get_indexer(scores.index)
     ent = pos + lag
     ok = (pos >= 0) & (ent < len(idx))
     scores, ent = scores[ok], ent[ok]
-    rows, w_prev, r_prev = [], None, None
+    rows, w_prev, r_prev, prev = [], None, None, None
     for i in range(len(ent) - 1):
         e0, e1 = ent[i], ent[i + 1]
         s = scores.iloc[i]
@@ -58,25 +85,39 @@ def evaluate(scores: pd.DataFrame, close: pd.DataFrame, bench: pd.Series, top_n:
         ic = both["s"].corr(both["f"], method="spearman")
         q = pd.qcut(both["s"].rank(method="first"), 5, labels=False)
         qret = both["f"].groupby(q).mean()
-        top = both["s"].nlargest(top_n).index
-        w_new = pd.Series(1 / len(top), index=top)
+        dias = (idx[e1] - idx[e0]).days
+        cash = risk_on is not None and not bool(risk_on.get(scores.index[i], True))
+        if cash:
+            top = []
+            w_new = pd.Series(dtype=float)
+            gross = RF * dias / 365
+        else:
+            top = select_portfolio(both["s"], top_n, prev, buffer, sectors, sector_cap)
+            w_new = pd.Series(1 / len(top), index=top)
+            gross = both.loc[top, "f"].mean()
         if w_prev is None:
-            turnover = 1.0                                   # primera compra: solo entra
+            turnover = w_new.sum()                           # primera compra: solo entra
         else:
             drift = w_prev * (1 + r_prev.reindex(w_prev.index).fillna(0))
-            drift = drift / drift.sum()
+            drift = drift / drift.sum() if drift.sum() > 0 else drift
             turnover = w_new.sub(drift, fill_value=0).abs().sum()   # compras + ventas
-        gross = both.loc[top, "f"].mean()
         rows.append({
             "fecha": scores.index[i], "entrada": idx[e0], "salida": idx[e1],
             "IC": ic, "Top N": gross, "Top N neto": gross - turnover * cost_bps / 1e4,
             "Universo": both["f"].mean(), "Benchmark": bench.iloc[e1] / bench.iloc[e0] - 1,
-            "Rotacion": turnover, "n": len(both),
+            "Rotacion": turnover, "n": len(both), "Efectivo": cash,
             **{f"Q{j + 1}": qret.get(j, np.nan) for j in range(5)},
             **({"tops": list(top)} if keep_tops else {}),
         })
-        w_prev, r_prev = w_new, both.loc[top, "f"]
+        w_prev = w_new if len(w_new) else None
+        r_prev = both.loc[top, "f"] if len(top) else None
+        prev = top
     return pd.DataFrame(rows).set_index("fecha") if rows else pd.DataFrame()
+
+
+def risk_on_signal(bench: pd.Series, ma: int = 200) -> pd.Series:
+    """Filtro de regimen: True si el SPY esta arriba de su media de 200 dias (tendencia sana)."""
+    return bench > bench.rolling(ma, min_periods=int(ma * .9)).mean()
 
 
 # ---------------------------------------------------------------- METRICAS
@@ -156,6 +197,8 @@ def sector_concentration(df: pd.DataFrame, sectors: pd.Series) -> float:
         return np.nan
     vals = []
     for tops in df["tops"]:
+        if not tops:
+            continue
         s = sectors.reindex(tops).fillna("Otro")
         vals.append(s.value_counts(normalize=True).iloc[0])
     return float(np.mean(vals))

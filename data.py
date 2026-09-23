@@ -168,6 +168,24 @@ def _one_info(t, retries=2):
     return t, None
 
 
+def fundamentals_from_infos(infos: dict) -> pd.DataFrame:
+    """Convierte respuestas crudas de Yahoo (.info) al formato de fundamentales del screener."""
+    rows = {t: {k: i.get(v) for k, v in FUND_FIELDS.items()} for t, i in infos.items() if i}
+    return _finish_fund(pd.DataFrame.from_dict(rows, orient="index"))
+
+
+def _finish_fund(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    num = [c for c in df.columns if c not in ("name", "sector_y")]
+    df[num] = df[num].apply(pd.to_numeric, errors="coerce")
+    df["fcf_yield"] = df["fcf"] / df["mcap"]
+    df["earn_yield"] = (df["eps"] / df["price"]).fillna(1 / df["pe"])
+    df["book_yield"] = (df["bvps"] / df["price"]).fillna(1 / df["pb"])
+    df["upside"] = df["target"] / df["price"] - 1
+    return df
+
+
 def fetch_fundamentals(tickers, workers=8, fetcher=None):
     """Fundamentales actuales (NO historicos) en paralelo.
     Devuelve (df, fallidos). Calcula tambien FCF yield."""
