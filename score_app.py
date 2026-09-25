@@ -583,7 +583,7 @@ with seccion(tab_r):
         cols = ["Empresa", "Sector", "Score", "Recomendación", "Corto", "Mediano", "Largo", "Momentum", *FACS, "Confianza"]
         st.dataframe(v[cols], width="stretch", height=560,
                      column_config=progress_cols(["Score", "Corto", "Mediano", "Largo", "Momentum", *FACS, "Confianza"]))
-        fig = px.scatter(v.reset_index(), x="Score", y="Momentum", hover_name="index", color="Sector",
+        fig = px.scatter(v.reset_index(names="ticker"), x="Score", y="Momentum", hover_name="ticker", color="Sector",
                          hover_data=["Empresa"], title="Fundamentales (Score) vs momentum")
         fig.add_hline(y=50, line_dash="dot", line_color=GRIS); fig.add_vline(x=50, line_dash="dot", line_color=GRIS)
         fig.update_layout(height=460, margin=dict(t=50, b=10))
@@ -659,8 +659,8 @@ with seccion(tab_s):
                            f"screener_{S['fecha']:%Y%m%d}.csv", "text/csv")
         wv = S["w"]; top15 = view.head(15)
         contrib = top15[sc.ESTRATEGIAS].fillna(0).mul(pd.Series(wv) / (sum(wv.values()) or 1), axis=1)
-        fig = px.bar(contrib.reset_index().melt(id_vars="index"), x="index", y="value", color="variable",
-                     labels={"index": "", "value": "Aporte al score", "variable": "Estrategia"},
+        fig = px.bar(contrib.reset_index(names="ticker").melt(id_vars="ticker"), x="ticker", y="value", color="variable",
+                     labels={"ticker": "", "value": "Aporte al score", "variable": "Estrategia"},
                      title="¿De dónde sale el score? (Top 15)")
         fig.update_layout(height=360, margin=dict(t=50, b=10)); st.plotly_chart(fig, width="stretch")
         sel = st.selectbox("🔎 Investigar una acción", list(view.index), key="scr_sel")
