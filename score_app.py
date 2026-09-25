@@ -181,6 +181,8 @@ def get_universe(tickers: tuple, target: str | None = None):
     live = sm.build_universe(infos, close) if infos else pd.DataFrame()
     resto = [t for t in en_snap if t not in live.index]
     parte_snap = _refresh_price_metrics(snap.loc[resto], close) if resto else pd.DataFrame()
+    if not parte_snap.empty and "_upside" in parte_snap and "upside" not in parte_snap:
+        parte_snap["upside"] = parte_snap["_upside"]
     uni = pd.concat([live, parte_snap])
     rep = dict(rep)
     rep["sin_fundamentales"] = [t for t in bad if t not in uni.index]
@@ -373,6 +375,41 @@ with seccion(tab_a):
         if conf < 60:
             st.warning("Confianza baja: faltan datos. Interpreta el score con cautela.")
 
+        # ---- Horizontes: corto / mediano / largo
+        hz, hz_det = sm.horizon_table(uni, ranking)
+        st.subheader("🔭 Qué tan buena se ve por plazo")
+        st.info("🧭 " + sm.horizon_verdict(*[hz.loc[ticker, h] for h in ("Corto", "Mediano", "Largo")]))
+        cards = st.columns(3)
+        reporta = None
+        try:
+            reporta = get_earnings((ticker,)).get(ticker)
+        except Exception:
+            pass
+        for col, h in zip(cards, ("Corto", "Mediano", "Largo")):
+            v = hz.loc[ticker, h]
+            sem = "⚪" if pd.isna(v) else "🟢" if v >= 65 else "🟡" if v >= 40 else "🔴"
+            with col.container(border=True):
+                st.markdown(f"**{h} plazo** · {sm.HORIZONTES[h]['plazo']}")
+                st.metric("Score", f"{sem} {v:.0f} / 100" if pd.notna(v) else "⚪ n/d")
+                d = hz_det[h].loc[ticker].dropna().sort_values(ascending=False) if ticker in hz_det[h].index else pd.Series(dtype=float)
+                for lab, p in list(d.items())[:2]:
+                    if p >= 55:
+                        st.caption(f"✅ {lab} ({p:.0f})")
+                for lab, p in list(d.items())[::-1][:2]:
+                    if p < 45:
+                        st.caption(f"⚠️ {lab} ({p:.0f})")
+                if h == "Corto" and reporta is not None and pd.notna(reporta):
+                    dias = (pd.Timestamp(reporta).normalize() - pd.Timestamp.today().normalize()).days
+                    if 0 <= dias <= 30:
+                        st.caption(f"📣 Reporta resultados en {dias} días: espera movimientos fuertes")
+                with st.expander("Detalle"):
+                    st.dataframe(d.rename("Percentil").to_frame(), width="stretch",
+                                 column_config=progress_cols(["Percentil"]))
+        st.caption("Cada score compara a la acción contra sus pares con los factores que suelen importar en ese plazo "
+                   "(corto: tendencia; mediano: momentum, crecimiento y analistas; largo: calidad, efectivo, deuda y "
+                   "valuación). Son probabilidades relativas, NO predicciones de precio. Aún no están validados: "
+                   "el paper trading y los snapshots semanales irán midiendo si funcionan.")
+
         g1, g2 = st.columns([1.2, 1])
         vals = [fs[f]["score"] for f in FACS]
         med = [ranking[f].median() for f in FACS]
@@ -536,9 +573,9 @@ with seccion(tab_r):
         rk = R["rk"]
         mc = st.slider("Confianza mínima de datos (%)", 0, 100, 60, 5)
         v = rk[rk["Confianza"] >= mc]
-        cols = ["Empresa", "Sector", "Score", "Recomendación", "Momentum", *FACS, "Confianza"]
+        cols = ["Empresa", "Sector", "Score", "Recomendación", "Corto", "Mediano", "Largo", "Momentum", *FACS, "Confianza"]
         st.dataframe(v[cols], width="stretch", height=560,
-                     column_config=progress_cols(["Score", "Momentum", *FACS, "Confianza"]))
+                     column_config=progress_cols(["Score", "Corto", "Mediano", "Largo", "Momentum", *FACS, "Confianza"]))
         fig = px.scatter(v.reset_index(), x="Score", y="Momentum", hover_name="index", color="Sector",
                          hover_data=["Empresa"], title="Fundamentales (Score) vs momentum")
         fig.add_hline(y=50, line_dash="dot", line_color=GRIS); fig.add_vline(x=50, line_dash="dot", line_color=GRIS)
@@ -856,6 +893,12 @@ with seccion(tab_m):
 2. Cada **factor** = promedio de sus percentiles disponibles. **Score** = promedio ponderado de factores:
    Growth 18%, Profitability 22%, CashFlow 15%, Risk 15%, Valuation 22%, Quality 8%.
 3. **Confianza** = % de métricas con dato. Los datos faltantes no se inventan.
+
+### Scores por plazo
+- **Corto (1–3 meses):** precio vs medias de 50 y 200 días, rendimiento de 3 meses, retroceso del último mes y volatilidad baja.
+- **Mediano (6–12 meses):** momentum 12-1, rendimiento de 6 meses, crecimiento de ventas y utilidades, valuación y analistas.
+- **Largo (3–5 años):** rentabilidad, flujo de caja, calidad, valuación, crecimiento y poca deuda.
+Todos son percentiles 0–100 contra los pares. Son probabilidades relativas, no predicciones de precio.
 
 ### Qué cambió en la v2
 | Antes | Ahora | Por qué |

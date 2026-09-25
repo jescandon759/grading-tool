@@ -74,6 +74,7 @@ def test_app(monkeypatch):
     # fuera del S&P, Yahoo falla, la SEC responde -> se analiza igual
     at.text_input[0].set_value("NEWCO"); _click(at, "🎯 Analizar")
     assert "NEWCO" in at.session_state["an"]["uni"].index
+    assert any("Qué tan buena se ve por plazo" in str(h.value) for h in at.subheader)
     assert any("SEC (EDGAR)" in str(i.value) for i in at.info)
     # fuera del S&P y Yahoo falla -> mensaje claro, sin romper la app
     at.text_input[0].set_value("ZZZZ")

@@ -44,3 +44,21 @@ def test_rank_universe_and_backtest():
 
 def test_rank_universe_empty():
     assert sm.rank_universe(pd.DataFrame()).empty
+
+
+def test_horizons():
+    rng = np.random.default_rng(1)
+    idx = pd.bdate_range("2024-01-01", periods=400)
+    tk = [f"T{i}" for i in range(30)]
+    drift = np.linspace(-0.002, 0.002, 30)                      # T29 sube mas, T0 cae mas
+    prices = pd.DataFrame(100 * np.exp(np.cumsum(rng.normal(0, .01, (400, 30)) + drift, 0)), idx, tk)
+    infos = {t: info(eps=5 if i > 2 else -5, revenueGrowth=.05, targetMeanPrice=120) for i, t in enumerate(tk)}
+    uni = sm.build_universe(infos, prices)
+    rk = sm.rank_universe(uni)
+    assert {"Corto", "Mediano", "Largo"} <= set(rk.columns)
+    assert rk.loc["T29", "Corto"] > rk.loc["T0", "Corto"]          # tendencia manda en el corto
+    assert rk.loc["T0", "Largo"] < rk["Largo"].median()            # con perdidas, largo plazo debil
+    hz, det = sm.horizon_table(uni, rk)
+    assert not det["Largo"].empty and hz.notna().all().all()
+    assert "largo plazo" in sm.horizon_verdict(80, 50, 80) or "tres plazos" in sm.horizon_verdict(80, 50, 80)
+    assert "Débil en los tres" in sm.horizon_verdict(10, 20, 15)

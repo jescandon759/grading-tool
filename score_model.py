@@ -103,6 +103,11 @@ def build_metrics(info: dict, prices=None) -> dict:
     if not np.isfinite(peg):
         peg = _g(info, "trailingPegRatio")
     m["peg"] = peg if np.isfinite(peg) and peg > 0 else np.nan   # PEG negativo no tiene sentido
+    # ---- Analistas (solo si Yahoo los trae)
+    tgt = _g(info, "targetMeanPrice")
+    m["upside"] = tgt / price - 1 if np.isfinite(tgt) and np.isfinite(price) and price > 0 else np.nan
+    m["rec_mean"] = _g(info, "recommendationMean")          # 1 = compra fuerte ... 5 = venta
+    m["n_analistas"] = _g(info, "numberOfAnalystOpinions")
     # ---- Riesgo de precio
     if prices is not None and len(pd.Series(prices).dropna()) > 30:
         p = pd.Series(prices).dropna(); ret = p.pct_change().dropna()
@@ -121,6 +126,7 @@ def momentum_metrics(prices) -> dict:
     sma50, sma200 = p.rolling(50).mean().iloc[-1], p.rolling(200).mean().iloc[-1]
     rd = p.pct_change().dropna()
     return {"ret_1m": ret(21), "ret_3m": ret(63), "ret_6m": ret(126), "ret_12m": ret(252),
+            "mom_12_1": (p.iloc[-21] / p.iloc[-252] - 1) if len(p) > 252 else np.nan,
             "dist_sma50": p.iloc[-1] / sma50 - 1 if sma50 > 0 else np.nan,
             "dist_sma200": p.iloc[-1] / sma200 - 1 if sma200 > 0 else np.nan,
             "mom_vol": rd.iloc[-63:].std() * np.sqrt(252) if len(rd) >= 63 else np.nan}
@@ -248,7 +254,8 @@ def explicar(fs: dict):
 
 def rank_universe(uni: pd.DataFrame) -> pd.DataFrame:
     """Investment Score de TODAS las empresas del universo (misma regla que la individual)."""
-    cols = ["Empresa", "Sector", "Score", "Confianza", *FACTORES, "Momentum", "Recomendación"]
+    cols = ["Empresa", "Sector", "Score", "Confianza", *FACTORES, "Momentum", "Recomendación",
+            "Corto", "Mediano", "Largo"]
     if uni is None or uni.empty:
         return pd.DataFrame(columns=cols)
     filas = {}
@@ -262,7 +269,90 @@ def rank_universe(uni: pd.DataFrame) -> pd.DataFrame:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     df["Momentum"] = momentum_score(uni)
     df["Recomendación"] = df["Score"].map(recomendacion)
+    hz, _ = horizon_table(uni, df)
+    df[["Corto", "Mediano", "Largo"]] = hz[["Corto", "Mediano", "Largo"]]
     return df.sort_values("Score", ascending=False)
+
+
+# ---------------------------------------------------------------- HORIZONTES (corto / mediano / largo)
+# Cada horizonte usa los factores que la evidencia academica asocia con ESE plazo.
+# (metrica, direccion, peso, etiqueta legible)
+HORIZONTES = {
+    "Corto": {"plazo": "1–3 meses", "partes": [
+        ("dist_sma50", +1, 1.0, "Precio vs su media de 50 días"),
+        ("dist_sma200", +1, 1.0, "Tendencia de largo plazo (media 200 días)"),
+        ("ret_3m", +1, 1.0, "Rendimiento de 3 meses"),
+        ("ret_1m", -1, 0.5, "Retroceso del último mes (tiende a revertir)"),
+        ("mom_vol", -1, 0.5, "Volatilidad reciente baja"),
+    ]},
+    "Mediano": {"plazo": "6–12 meses", "partes": [
+        ("mom_12_1", +1, 1.5, "Momentum 12-1 meses"),
+        ("ret_6m", +1, 0.75, "Rendimiento de 6 meses"),
+        ("revenue_growth", +1, 1.0, "Crecimiento de ventas"),
+        ("earnings_growth", +1, 0.75, "Crecimiento de utilidades"),
+        ("earnings_yield", +1, 0.75, "Valuación (utilidad / precio)"),
+        ("upside", +1, 0.5, "Upside de analistas"),
+        ("rec_mean", -1, 0.5, "Consenso de analistas"),
+    ]},
+    "Largo": {"plazo": "3–5 años", "partes": [
+        ("Profitability", +1, 1.25, "Rentabilidad (ROE, márgenes)"),
+        ("CashFlow", +1, 1.0, "Generación de efectivo"),
+        ("Quality", +1, 0.75, "Calidad / ventaja competitiva (márgenes brutos)"),
+        ("Valuation", +1, 1.0, "Precio razonable vs lo que gana"),
+        ("Growth", +1, 0.5, "Crecimiento"),
+        ("debt_to_equity", -1, 0.75, "Poca deuda"),
+    ]},
+}
+FACTOR_ESCALA = set(FACTORES)            # ya vienen en 0-100 (percentil); no se re-rankean
+
+
+def horizon_table(uni: pd.DataFrame, factores: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Devuelve (scores por horizonte 0-100, detalle {horizonte: DataFrame de percentiles por parte}).
+    Cada parte es percentil vs el universo (pares); se promedian ignorando datos faltantes."""
+    base = uni.copy()
+    for f in FACTORES:
+        base[f] = factores[f].reindex(base.index)
+    out, detalle = pd.DataFrame(index=base.index), {}
+    for h, cfg in HORIZONTES.items():
+        num = pd.Series(0.0, index=base.index); den = pd.Series(0.0, index=base.index)
+        det = {}
+        for col, d, w, lab in cfg["partes"]:
+            if col not in base:
+                continue
+            x = pd.to_numeric(base[col], errors="coerce")
+            if col in FACTOR_ESCALA:
+                p = x
+            else:
+                if x.notna().sum() < 5:
+                    continue
+                p = x.rank(pct=True) * 100
+                p = p if d > 0 else 100 - p
+            det[lab] = p
+            ok = p.notna()
+            num[ok] += p[ok] * w; den[ok] += w
+        tot_w = sum(w for c, _, w, _ in cfg["partes"] if c in base)
+        sc = num / den.replace(0, np.nan)
+        sc[den < 0.5 * tot_w] = np.nan                      # muy pocos datos -> sin score
+        out[h] = sc
+        detalle[h] = pd.DataFrame(det)
+    return out, detalle
+
+
+def horizon_verdict(c, m, l) -> str:
+    """Resumen en una frase de los tres horizontes."""
+    fmt = lambda x: "n/d" if not np.isfinite(x) else ("fuerte" if x >= 65 else "débil" if x < 40 else "neutral")
+    c_, m_, l_ = (fmt(float(v)) if v is not None else "n/d" for v in (c, m, l))
+    if l_ == "fuerte" and c_ == "débil":
+        return "Buen negocio a largo plazo, pero mal momento a corto: posible oportunidad si esperas a que el precio se estabilice."
+    if l_ == "fuerte" and c_ in ("fuerte", "neutral") and m_ != "débil":
+        return "Buen negocio y buen momento: los tres plazos acompañan."
+    if l_ == "débil" and c_ == "fuerte":
+        return "Sube en el corto plazo sin un negocio sólido detrás: movimiento especulativo, cuidado con perseguirlo."
+    if l_ == "débil" and c_ == "débil" and m_ == "débil":
+        return "Débil en los tres plazos: ni el negocio ni el precio acompañan."
+    if m_ == "fuerte":
+        return "Perfil de mediano plazo: tendencia y crecimiento a favor, fundamentales de largo plazo sin destacar."
+    return f"Señales mixtas: corto {c_}, mediano {m_}, largo {l_}."
 
 
 # ---------------------------------------------------------------- SENALES PARA BACKTEST
