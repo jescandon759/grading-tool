@@ -25,6 +25,13 @@ import research as rs
 import score_model as sm
 import screener as sc
 
+# Streamlit Cloud a veces actualiza score_app.py pero deja en memoria la version vieja de los
+# modulos locales (-> AttributeError tras un deploy). Si falta algo nuevo, se recargan.
+if not all(hasattr(sm, a) for a in ("horizon_table", "horizon_verdict")):
+    import importlib
+    for _m in (data, sec_data, fx, sm, sc, bt, rs):
+        importlib.reload(_m)
+
 st.set_page_config(page_title="Investment Score", page_icon="🎯", layout="wide")
 try:   # la SEC pide identificarse; se puede poner un correo en config/settings.json -> "sec_user_agent"
     import json as _json, pathlib as _pl
