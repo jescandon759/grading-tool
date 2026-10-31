@@ -1,11 +1,11 @@
 {
- "generado": "2026-10-03T18:27:43+00:00",
- "datos_al_cierre": "2026-10-02",
+ "generado": "2026-10-31T18:56:39+00:00",
+ "datos_al_cierre": "2026-10-30",
  "regimen": {
-  "spy": 769.64,
-  "media_200d": 717.04,
+  "spy": 755.72,
+  "media_200d": 725.98,
   "alcista": true,
-  "spy_semana": -0.0022
+  "spy_semana": -0.0056
  },
  "reglas": {
   "top_n": 10,
@@ -14,266 +14,330 @@
  },
  "portafolio": [
   {
-   "ticker": "INCY",
-   "empresa": "Incyte Corporation",
-   "sector": "Salud",
+   "ticker": "GRMN",
+   "empresa": "Garmin Ltd.",
+   "sector": "Consumo discrecional",
    "rank_screener": 1,
-   "score": 74.4,
+   "score": 75.4,
    "senal": "Reversion",
-   "Momentum": 75.8,
-   "Reversion": 92.0,
-   "Multifactor": 76.8,
-   "Eventos": 50.9,
-   "rend_1s": -0.0693,
-   "rend_3m": -0.0028,
-   "tendencia": "Alcista",
-   "reporta_en_dias": 24.0,
-   "upside_analistas": 0.1138,
-   "investment_score": 71.4,
-   "nuevo_esta_semana": true
-  },
-  {
-   "ticker": "BNY",
-   "empresa": "The Bank of New York Mellon Cor",
-   "sector": "Financiero",
-   "rank_screener": 2,
-   "score": 73.9,
-   "senal": "Momentum",
-   "Momentum": 87.6,
-   "Reversion": 81.6,
-   "Multifactor": 70.1,
-   "Eventos": 51.3,
-   "rend_1s": -0.0316,
-   "rend_3m": -0.0265,
-   "tendencia": "Alcista",
-   "reporta_en_dias": 12.0,
-   "upside_analistas": 0.1422,
-   "investment_score": 52.8,
-   "nuevo_esta_semana": false
-  },
-  {
-   "ticker": "JNJ",
-   "empresa": "Johnson & Johnson",
-   "sector": "Salud",
-   "rank_screener": 3,
-   "score": 71.3,
-   "senal": "Reversion",
-   "Momentum": 72.0,
-   "Reversion": 91.9,
-   "Multifactor": 75.8,
-   "Eventos": 42.7,
-   "rend_1s": -0.056,
-   "rend_3m": -0.0079,
-   "tendencia": "Alcista",
-   "reporta_en_dias": 10.0,
-   "upside_analistas": 0.0908,
-   "investment_score": 53.2,
-   "nuevo_esta_semana": true
-  },
-  {
-   "ticker": "WDC",
-   "empresa": "Western Digital Corporation",
-   "sector": "Tecnologia",
-   "rank_screener": 4,
-   "score": 71.1,
-   "senal": "Reversion",
-   "Momentum": 67.5,
-   "Reversion": 82.9,
-   "Multifactor": 66.0,
-   "Eventos": 72.3,
-   "rend_1s": -0.0909,
-   "rend_3m": -0.2806,
+   "Momentum": 83.5,
+   "Reversion": 86.2,
+   "Multifactor": 74.4,
+   "Eventos": 53.9,
+   "rend_1s": -0.0717,
+   "rend_3m": -0.1018,
    "tendencia": "Alcista",
    "reporta_en_dias": null,
-   "upside_analistas": 0.6011,
-   "investment_score": 63.5,
+   "upside_analistas": 0.092,
+   "investment_score": 58.8,
    "nuevo_esta_semana": true
-  },
-  {
-   "ticker": "STT",
-   "empresa": "State Street Corporation",
-   "sector": "Financiero",
-   "rank_screener": 5,
-   "score": 70.6,
-   "senal": "Momentum",
-   "Momentum": 94.6,
-   "Reversion": 68.7,
-   "Multifactor": 65.5,
-   "Eventos": 43.9,
-   "rend_1s": -0.0245,
-   "rend_3m": 0.0053,
-   "tendencia": "Alcista",
-   "reporta_en_dias": 11.0,
-   "upside_analistas": 0.1364,
-   "investment_score": 52.8,
-   "nuevo_esta_semana": false
   },
   {
    "ticker": "CPAY",
    "empresa": "Corpay, Inc.",
    "sector": "Financiero",
-   "rank_screener": 6,
-   "score": 68.8,
+   "rank_screener": 2,
+   "score": 73.1,
    "senal": "Momentum",
-   "Momentum": 93.3,
-   "Reversion": 45.3,
-   "Multifactor": 69.1,
-   "Eventos": 55.4,
-   "rend_1s": -0.0088,
-   "rend_3m": 0.1067,
+   "Momentum": 91.1,
+   "Reversion": 71.7,
+   "Multifactor": 74.5,
+   "Eventos": 45.5,
+   "rend_1s": -0.0184,
+   "rend_3m": 0.0393,
+   "tendencia": "Alcista",
+   "reporta_en_dias": 4.0,
+   "upside_analistas": 0.149,
+   "investment_score": 57.7,
+   "nuevo_esta_semana": false
+  },
+  {
+   "ticker": "NWSA",
+   "empresa": "News Corporation",
+   "sector": "Comunicaciones",
+   "rank_screener": 3,
+   "score": 71.3,
+   "senal": "Reversion",
+   "Momentum": 79.9,
+   "Reversion": 83.0,
+   "Multifactor": 70.0,
+   "Eventos": 48.7,
+   "rend_1s": -0.0527,
+   "rend_3m": 0.0457,
+   "tendencia": "Alcista",
+   "reporta_en_dias": 4.0,
+   "upside_analistas": 0.2374,
+   "investment_score": 50.0,
+   "nuevo_esta_semana": true
+  },
+  {
+   "ticker": "NDSN",
+   "empresa": "Nordson Corporation",
+   "sector": "Industrial",
+   "rank_screener": 4,
+   "score": 71.0,
+   "senal": "Momentum",
+   "Momentum": 88.7,
+   "Reversion": 68.2,
+   "Multifactor": 74.5,
+   "Eventos": 41.8,
+   "rend_1s": 0.012,
+   "rend_3m": 0.0695,
    "tendencia": "Alcista",
    "reporta_en_dias": null,
-   "upside_analistas": 0.1683,
-   "investment_score": 55.7,
+   "upside_analistas": 0.0838,
+   "investment_score": 59.7,
+   "nuevo_esta_semana": true
+  },
+  {
+   "ticker": "SOLV",
+   "empresa": "Solventum Corporation",
+   "sector": "Salud",
+   "rank_screener": 5,
+   "score": 70.9,
+   "senal": "Reversion",
+   "Momentum": 64.9,
+   "Reversion": 92.5,
+   "Multifactor": 66.3,
+   "Eventos": 65.1,
+   "rend_1s": -0.0478,
+   "rend_3m": -0.0765,
+   "tendencia": "Alcista",
+   "reporta_en_dias": 5.0,
+   "upside_analistas": 0.1643,
+   "investment_score": 44.6,
+   "nuevo_esta_semana": true
+  },
+  {
+   "ticker": "FTNT",
+   "empresa": "Fortinet, Inc.",
+   "sector": "Tecnologia",
+   "rank_screener": 6,
+   "score": 70.8,
+   "senal": "Reversion",
+   "Momentum": 68.4,
+   "Reversion": 99.0,
+   "Multifactor": 64.5,
+   "Eventos": 55.8,
+   "rend_1s": -0.244,
+   "rend_3m": -0.1662,
+   "tendencia": "Alcista",
+   "reporta_en_dias": null,
+   "upside_analistas": 0.0738,
+   "investment_score": 56.1,
+   "nuevo_esta_semana": true
+  },
+  {
+   "ticker": "ILMN",
+   "empresa": "Illumina, Inc.",
+   "sector": "Salud",
+   "rank_screener": 7,
+   "score": 70.7,
+   "senal": "Reversion",
+   "Momentum": 82.7,
+   "Reversion": 94.7,
+   "Multifactor": 59.3,
+   "Eventos": 46.0,
+   "rend_1s": -0.1241,
+   "rend_3m": 0.1909,
+   "tendencia": "Alcista",
+   "reporta_en_dias": null,
+   "upside_analistas": 0.0572,
+   "investment_score": 48.7,
+   "nuevo_esta_semana": true
+  },
+  {
+   "ticker": "EXPD",
+   "empresa": "Expeditors International of Was",
+   "sector": "Industrial",
+   "rank_screener": 8,
+   "score": 70.7,
+   "senal": "Momentum",
+   "Momentum": 96.1,
+   "Reversion": 43.1,
+   "Multifactor": 74.1,
+   "Eventos": 55.0,
+   "rend_1s": 0.0135,
+   "rend_3m": 0.1657,
+   "tendencia": "Alcista",
+   "reporta_en_dias": 3.0,
+   "upside_analistas": -0.0874,
+   "investment_score": 52.6,
    "nuevo_esta_semana": true
   },
   {
    "ticker": "KO",
    "empresa": "Coca-Cola Company (The)",
    "sector": "Consumo basico",
-   "rank_screener": 7,
-   "score": 68.1,
+   "rank_screener": 11,
+   "score": 69.7,
    "senal": "Momentum",
-   "Momentum": 82.1,
-   "Reversion": 76.9,
-   "Multifactor": 69.3,
-   "Eventos": 36.7,
-   "rend_1s": -0.0246,
-   "rend_3m": 0.0386,
+   "Momentum": 88.3,
+   "Reversion": 42.6,
+   "Multifactor": 74.7,
+   "Eventos": 61.4,
+   "rend_1s": 0.0148,
+   "rend_3m": 0.0896,
    "tendencia": "Alcista",
-   "reporta_en_dias": 24.0,
-   "upside_analistas": 0.1051,
+   "reporta_en_dias": null,
+   "upside_analistas": 0.0368,
    "investment_score": 58.2,
-   "nuevo_esta_semana": true
-  },
-  {
-   "ticker": "NUE",
-   "empresa": "Nucor Corporation",
-   "sector": "Materiales",
-   "rank_screener": 8,
-   "score": 68.1,
-   "senal": "Momentum",
-   "Momentum": 91.0,
-   "Reversion": 58.9,
-   "Multifactor": 61.9,
-   "Eventos": 52.4,
-   "rend_1s": -0.0254,
-   "rend_3m": 0.0761,
-   "tendencia": "Alcista",
-   "reporta_en_dias": 23.0,
-   "upside_analistas": 0.1812,
-   "investment_score": 52.8,
-   "nuevo_esta_semana": true
-  },
-  {
-   "ticker": "DOC",
-   "empresa": "Healthpeak Properties, Inc.",
-   "sector": "Bienes raices",
-   "rank_screener": 10,
-   "score": 66.6,
-   "senal": "Reversion",
-   "Momentum": 78.0,
-   "Reversion": 90.1,
-   "Multifactor": 60.9,
-   "Eventos": 34.7,
-   "rend_1s": -0.0404,
-   "rend_3m": -0.0908,
-   "tendencia": "Alcista",
-   "reporta_en_dias": 30.0,
-   "upside_analistas": 0.1774,
-   "investment_score": 56.4,
-   "nuevo_esta_semana": true
+   "nuevo_esta_semana": false
   },
   {
    "ticker": "ROST",
    "empresa": "Ross Stores, Inc.",
    "sector": "Consumo discrecional",
-   "rank_screener": 11,
-   "score": 66.5,
+   "rank_screener": 15,
+   "score": 68.7,
    "senal": "Momentum",
-   "Momentum": 81.2,
-   "Reversion": 55.3,
-   "Multifactor": 72.2,
-   "Eventos": 46.8,
-   "rend_1s": -0.0321,
-   "rend_3m": 0.0834,
+   "Momentum": 82.8,
+   "Reversion": 72.1,
+   "Multifactor": 71.2,
+   "Eventos": 40.5,
+   "rend_1s": -0.0044,
+   "rend_3m": -0.0956,
    "tendencia": "Alcista",
-   "reporta_en_dias": null,
-   "upside_analistas": 0.1838,
-   "investment_score": 53.6,
-   "nuevo_esta_semana": true
+   "reporta_en_dias": 19.0,
+   "upside_analistas": 0.1908,
+   "investment_score": 55.2,
+   "nuevo_esta_semana": false
   }
  ],
  "entran": [
-  "INCY",
-  "JNJ",
-  "WDC",
-  "CPAY",
-  "KO",
-  "NUE",
-  "DOC",
-  "ROST"
+  "GRMN",
+  "NWSA",
+  "NDSN",
+  "SOLV",
+  "FTNT",
+  "ILMN",
+  "EXPD"
  ],
  "salen": [
-  "EXPE",
-  "ABNB",
-  "ALL",
-  "TRGP",
-  "UNP",
-  "GWW",
-  "CSX",
-  "CNC"
+  "INCY",
+  "BNY",
+  "JNJ",
+  "WDC",
+  "STT",
+  "NUE",
+  "DOC"
  ],
- "reportan_esta_semana_top30": [],
+ "reportan_esta_semana_top30": [
+  {
+   "ticker": "CPAY",
+   "dias": 4
+  },
+  {
+   "ticker": "NWSA",
+   "dias": 4
+  },
+  {
+   "ticker": "SOLV",
+   "dias": 5
+  },
+  {
+   "ticker": "EXPD",
+   "dias": 3
+  },
+  {
+   "ticker": "IFF",
+   "dias": 3
+  },
+  {
+   "ticker": "ZBRA",
+   "dias": 3
+  },
+  {
+   "ticker": "AMD",
+   "dias": 3
+  },
+  {
+   "ticker": "HST",
+   "dias": 4
+  },
+  {
+   "ticker": "MAR",
+   "dias": 2
+  },
+  {
+   "ticker": "MPC",
+   "dias": 3
+  },
+  {
+   "ticker": "ADM",
+   "dias": 3
+  },
+  {
+   "ticker": "NWS",
+   "dias": 4
+  },
+  {
+   "ticker": "DDOG",
+   "dias": 4
+  },
+  {
+   "ticker": "RVTY",
+   "dias": 3
+  },
+  {
+   "ticker": "EVRG",
+   "dias": 5
+  }
+ ],
  "top_investment_score": [
   {
    "ticker": "CF",
    "empresa": "CF Industries Holdings, Inc.",
    "sector": "Materiales",
-   "score": 80.2,
-   "momentum": 53.3
+   "score": 79.1,
+   "momentum": 50.6
+  },
+  {
+   "ticker": "SNDK",
+   "empresa": "Sandisk Corporation",
+   "sector": "Tecnologia",
+   "score": 78.9,
+   "momentum": 34.5
   },
   {
    "ticker": "MU",
    "empresa": "Micron Technology, Inc.",
    "sector": "Tecnologia",
-   "score": 75.8,
-   "momentum": 77.2
+   "score": 76.8,
+   "momentum": 66.5
   },
   {
    "ticker": "NEM",
    "empresa": "Newmont Corporation",
    "sector": "Materiales",
-   "score": 73.8,
-   "momentum": 70.5
-  },
-  {
-   "ticker": "EOG",
-   "empresa": "EOG Resources, Inc.",
-   "sector": "Energia",
-   "score": 73.5,
-   "momentum": 50.8
+   "score": 76.6,
+   "momentum": 38.2
   },
   {
    "ticker": "BKNG",
    "empresa": "Booking Holdings Inc. Common St",
    "sector": "Consumo discrecional",
-   "score": 73.2,
-   "momentum": 28.7
+   "score": 73.8,
+   "momentum": 15.2
   }
  ],
  "paper_trading": {
   "1 semanas": {
-   "picks_medidos": 10,
-   "exceso_promedio": -0.0007,
-   "tasa_acierto": 0.5
+   "picks_medidos": 29,
+   "exceso_promedio": -0.0061,
+   "tasa_acierto": 0.414
+  },
+  "4 semanas": {
+   "picks_medidos": 19,
+   "exceso_promedio": 0.05,
+   "tasa_acierto": 0.737
   }
  },
  "calidad_datos": {
   "tickers": 515,
   "sin_precio": 0,
   "sin_fundamentales": 0,
-  "liquidas": 515,
+  "liquidas": 513,
   "candidatas": 71
  },
  "destinatarios": [
